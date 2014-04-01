@@ -1,0 +1,19 @@
+{
+  "name": "shepherd",
+  "version": "0.0.0",
+  "description": "Control a herd of wild processes.",
+  "main": "shepherd.coffee",
+  "scripts": {
+    "test": "cd test && mocha"
+  },
+  "author": "Jesse Dailey <jesse.dailey@gmail.com>",
+  "dependencies": {
+    "bling": "latest",
+    "shelljs": "latest",
+    "commander": "latest",
+    "coffee-script": "latest"
+  },
+  "devDependencies": {
+    "mocha": "latest"
+  }
+}

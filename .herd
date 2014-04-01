@@ -1,0 +1,14 @@
+{
+	"command": "node test.js",
+	"count": 4,
+	"port": 9000,
+	"restart": {
+		"code": 3,
+		"max": 10,
+		"interval": 10000
+	},
+	"env": {
+		"CUSTOM_CONFIG": "1234"
+	}
+}
+
