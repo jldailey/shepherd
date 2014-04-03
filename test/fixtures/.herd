@@ -1,0 +1,17 @@
+{
+	"command": "node server.js",
+	"count": 4,
+	"restart": {
+		"code": 3,
+		"max": 10,
+		"interval": 10000
+	},
+	"env": {
+		"CUSTOM_CONFIG": "1234"
+	}
+	"git": {
+		"httpPort": 9000,
+		"branch": "production"
+	}
+}
+
