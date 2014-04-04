@@ -1,12 +1,20 @@
 
 Shell = require("shelljs")
 
-child = Shell.exec("../bin/shepherd -f .herd")
+describe("shepherd", function() {
 
-
-describe("shepherd", function(done) {
-	var child = Shell.exec("../bin/shepherd -f ./fixtures/.herd", function(exitCode) {
-		done();
+	beforeEach(function() {
+		Shell.exec("mv fixtures/repo/_git fixtures/repo/.git", function() {
+			Shell.exec("mv fixtures/server/_git fixtures/server/.git", function() {
+			})
+		})
 	})
+
+	afterEach(function() {
+		Shell.exec("mv fixtures/repo/.git fixtures/repo/_git", function() {
+			Shell.exec("mv fixtures/server/.git fixtures/server/_git", function() {
+			})
+		})
+	})
+
 })
-		
