@@ -3,3 +3,6 @@
 	filemode = true
 	bare = false
 	logallrefupdates = true
+[remote "server"]
+	url = ../server
+	fetch = +refs/heads/*:refs/remotes/server/*

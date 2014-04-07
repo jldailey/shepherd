@@ -1,6 +1,8 @@
-require 'http'
+Http = require('http')
 
-http.createServer(function(req, res) {
+console.log("Listening on port", process.env.PORT)
+
+Http.createServer(function(req, res) {
 	res.statusCode = 200;
 	res.end("OK");
 }).listen(process.env.PORT);

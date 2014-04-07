@@ -1,1 +1,4 @@
 0000000000000000000000000000000000000000 3c4817c4001e09f87222335a9cc105d6c656eb83 Jesse Dailey <jesse.dailey@gmail.com> 1396551946 -0400	commit (initial): initial commit
+3c4817c4001e09f87222335a9cc105d6c656eb83 fbba29a1babae6a998ace55611e0a6260c453453 Jesse Dailey <jesse.dailey@gmail.com> 1396910613 -0400	commit: typo
+fbba29a1babae6a998ace55611e0a6260c453453 0306d1e4f21c9ec1e31d603402fadc59111cc5fa Jesse Dailey <jesse.dailey@gmail.com> 1396910678 -0400	commit (merge): Merge branch 'master' of ../server
+0306d1e4f21c9ec1e31d603402fadc59111cc5fa 3c54113d7884d0c32d988eb2e6420ce828cc38b4 Jesse Dailey <jesse.dailey@gmail.com> 1396910946 -0400	commit: add some logging
