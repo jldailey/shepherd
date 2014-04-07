@@ -2,6 +2,8 @@
 $ = require("bling")
 Shell = require("shelljs")
 
+log =($.logger "[mocha]")
+
 describe("shepherd", function() {
 
 	beforeEach(function(done) {
@@ -20,14 +22,14 @@ describe("shepherd", function() {
 
 	it("starts children", function(done) {
 		shepherd = Shell.exec("bin/shepherd -f test/.herd", { silent: true, async: true }, function(exitCode) {
-			$.log("shepherd exitCode:", exitCode)
+			log("shepherd exitCode:", exitCode)
 			done();
 		})
 		shepherd.stdout.on('data', function(data) {
-			$.log(data)
+			log(data)
 		})
 		shepherd.stderr.on('data', function(data) {
-			$.log("stderr", data)
+			log("stderr", data)
 		})
 	})
 
