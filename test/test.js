@@ -2,15 +2,13 @@
 $ = require("bling")
 Shell = require("shelljs")
 
-log =($.logger "[mocha]")
+log = $.logger("[mocha]")
 
 describe("shepherd", function() {
 
 	beforeEach(function(done) {
-		Shell.exec("mv test/fixtures/repo/_git test/fixtures/repo/.git", function(exitCode) {
-			Shell.exec("mv test/fixtures/server/_git test/fixtures/server/.git", function(exitCode) {
-				done();
-			})
+		Shell.exec("mv test/fixtures/server/_git test/fixtures/server/.git", function(exitCode) {
+			done();
 		})
 	})
 
@@ -29,15 +27,13 @@ describe("shepherd", function() {
 			log(data)
 		})
 		shepherd.stderr.on('data', function(data) {
-			log("stderr", data)
+			log("[stderr]", data)
 		})
 	})
 
 	afterEach(function(done) {
-		Shell.exec("mv test/fixtures/repo/.git test/fixtures/repo/_git", function(exitCode) {
-			Shell.exec("mv test/fixtures/server/.git test/fixtures/server/_git", function(exitCode) {
-				done();
-			})
+		Shell.exec("mv test/fixtures/server/.git test/fixtures/server/_git", function(exitCode) {
+			done();
 		})
 	})
 
