@@ -11,7 +11,8 @@
     "bling": "latest",
     "shelljs": "latest",
     "commander": "latest",
-    "coffee-script": "latest"
+    "coffee-script": "latest",
+    "connect": "^2.14.4"
   },
   "devDependencies": {
     "mocha": "latest"
