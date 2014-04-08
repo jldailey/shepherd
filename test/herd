@@ -1,0 +1,4 @@
+{
+	"command": "cd test/fixtures/server && node server.js",
+	"count": 4
+}
