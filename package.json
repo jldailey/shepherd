@@ -11,7 +11,6 @@
     "bling": "latest",
     "shelljs": "latest",
     "commander": "latest",
-    "coffee-script": "latest",
     "express": "latest"
   },
   "devDependencies": {
