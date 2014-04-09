@@ -12,7 +12,7 @@
     "shelljs": "latest",
     "commander": "latest",
     "coffee-script": "latest",
-    "connect": "^2.14.4"
+    "express": "latest"
   },
   "devDependencies": {
     "mocha": "latest"
