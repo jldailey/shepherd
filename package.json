@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "description": "Control a herd of wild processes.",
   "main": "shepherd.coffee",
+  "bin": {
+		"shepherd": "bin/shepherd"
+	},
   "scripts": {
     "test": "mocha test/test.js"
   },
