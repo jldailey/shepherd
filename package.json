@@ -10,6 +10,10 @@
     "test": "mocha test/test.js"
   },
   "author": "Jesse Dailey <jesse.dailey@gmail.com>",
+	"repository": {
+		"type": "git",
+		"url": "git@github.ua.com:jdailey/shepherd.git"
+	},
   "dependencies": {
     "bling": "latest",
     "shelljs": "latest",
