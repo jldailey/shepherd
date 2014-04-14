@@ -1,3 +1,5 @@
 0000000000000000000000000000000000000000 5770455bfbe56b2f229d67cb753a33a7c0f7a6bb Jesse Dailey <jesse.dailey@gmail.com> 1396911249 -0400	commit (initial): initial
 5770455bfbe56b2f229d67cb753a33a7c0f7a6bb bf4cbbdfb0da2838e1199b46c93af146c7e39fbb Jesse Dailey <jesse.dailey@gmail.com> 1397263085 -0400	commit: report the PORT number, so we can test it
 bf4cbbdfb0da2838e1199b46c93af146c7e39fbb 78e73dd78b72048d575571ae53e76dc7443b031a Jesse Dailey <jesse.dailey@gmail.com> 1397506618 -0400	commit: add request logging
+78e73dd78b72048d575571ae53e76dc7443b031a 4ff44d829347e06fbd140cc236b4311d642444fc Jesse Dailey <jesse.dailey@gmail.com> 1397506831 -0400	commit: fix typo
+4ff44d829347e06fbd140cc236b4311d642444fc 2291671ce813dd8f96de7f0bdf6f945981a90582 Jesse Dailey <jesse.dailey@gmail.com> 1397507870 -0400	commit: add an artificial startup delay
