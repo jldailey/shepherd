@@ -2,39 +2,20 @@
 $ = require("bling")
 Shell = require("shelljs")
 
-log = $.logger("[mocha]")
+log = $.logger("[test]")
 
-describe("shepherd", function() {
+shepherd = Shell.exec("bin/shepherd -f test/herd", { silent: true, async: true }, function(exitCode) {
+	log("shepherd exitCode:", exitCode)
+})
 
-	beforeEach(function(done) {
-		Shell.exec("mv test/fixtures/server/_git test/fixtures/server/.git", function(exitCode) {
-			done();
-		})
-	})
+shepherd.stdout.on('data', function(data) {
+	log(data)
+})
 
-	it("runs in a cwd", function(done) {
-		Shell.exec("ls -l", { silent: true, async: true }, function(exitCode) {
-			done();
-		})
-	})
+shepherd.stderr.on('data', function(data) {
+	log("[stderr]", data)
+})
 
-	it("starts children", function(done) {
-		shepherd = Shell.exec("bin/shepherd -f test/.herd", { silent: true, async: true }, function(exitCode) {
-			log("shepherd exitCode:", exitCode)
-			done();
-		})
-		shepherd.stdout.on('data', function(data) {
-			log(data)
-		})
-		shepherd.stderr.on('data', function(data) {
-			log("[stderr]", data)
-		})
-	})
-
-	afterEach(function(done) {
-		Shell.exec("mv test/fixtures/server/.git test/fixtures/server/_git", function(exitCode) {
-			done();
-		})
-	})
-
+shepherd.on("exit", function() {
+	log("Test complete.")
 })
