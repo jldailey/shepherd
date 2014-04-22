@@ -3,9 +3,13 @@
 		"cd": "test/fixtures/server",
 		"cmd": "node server.js"
 	},
-	"count": 4,
+	"count": 6,
 	"restart": {
 		"timeout": 10000,
 		"gracePeriod": 1000
+	},
+	"nginx": {
+		"config":"/usr/local/etc/nginx/conf.d/shepherd_pool.conf",
+		"reload":"launchctl stop homebrew.mxcl.nginx && launchctl start homebrew.mxcl.nginx"
 	}
 }
