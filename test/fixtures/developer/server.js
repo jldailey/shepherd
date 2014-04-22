@@ -26,4 +26,4 @@ setTimeout(function() {
 		})
 	}).listen(process.env.PORT);
 	console.log("Listening on port", process.env.PORT)
-}, 1000) // add an artificial startup delay
+}, 500) // add an artificial startup delay
