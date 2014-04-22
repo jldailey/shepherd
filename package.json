@@ -18,7 +18,8 @@
     "bling": "latest",
     "shelljs": "latest",
     "commander": "latest",
-    "express": "latest"
+    "express": "latest",
+    "rabbit.js": "^0.4.1"
   },
   "devDependencies": {
     "mocha": "latest",
