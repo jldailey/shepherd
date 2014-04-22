@@ -43,7 +43,7 @@ $.Promise.exec("mv test/fixtures/server/_git test/fixtures/server/.git").wait(fu
 		var once = false
 
 		// wait for the master server to come online
-		trigger(/listening on master port/i, function(line) {
+		trigger(/listening on master port/i, $.once(function(line) {
 			var done = $.Promise(),
 				step = function(body) {
 					try { body = JSON.parse(body) }
@@ -108,7 +108,7 @@ $.Promise.exec("mv test/fixtures/server/_git test/fixtures/server/.git").wait(fu
 					})
 				}))
 			})
-		})
+		}))
 
 		shepherd.stdout.on('data', data_out)
 		shepherd.stdout.on('drain', data_out)
