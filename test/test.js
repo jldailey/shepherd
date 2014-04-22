@@ -1,27 +1,9 @@
 
-// Features to test:
-// start a flock
-// kill a flock
-// restart a flock (rolling)
-// recieve signals via
-//	http
-//	amqp
-//
-// High-level:
-// start a flock of processes
-// check that they are all up (by reading server/totem and comparing to response totem)
-// mv server/_git .git
-// mv developer/_git .git
-// cd developer
-// echo random() > totem
-// git commit totem -m "fake commit"
-// git push
-// trigger a git pull and rolling restart
-// check that all the processes have the correct new totem
 $ = require("bling")
 Shell = require("shelljs")
 Helpers = require("../lib/helpers")
 Request = require('request')
+Rabbit = require('rabbit.js')
 log = $.logger("[test]")
 
 fail = function(err) {
@@ -45,7 +27,8 @@ $.Promise.exec("mv test/fixtures/server/_git test/fixtures/server/.git").wait(fu
 		var shepherd = Shell.exec("bin/shepherd -f test/herd", { async: true, silent: true }),
 			data_out = function(data) {
 				data.split(/\n/).forEach(function(d) { if( d.length ) log(d) })
-			}, trigger = function(pattern, cb) {
+			},
+			trigger = function(pattern, cb) {
 				shepherd.stdout.on('data', function(data) {
 					data.split(/\n/).forEach(function(d) {
 						if(d.match(pattern)) cb(d)
@@ -57,31 +40,73 @@ $.Promise.exec("mv test/fixtures/server/_git test/fixtures/server/.git").wait(fu
 			log('shepherd.onExit', exitCode)
 		})
 
+		var once = false
+
 		// wait for the master server to come online
 		trigger(/listening on master port/i, function(line) {
+			var done = $.Promise(),
+				step = function(body) {
+					try { body = JSON.parse(body) }
+					catch(err) { return done.fail(err) }
+					done.finish(1)
+				}
 			// check that all 4 children started
-			request("http://localhost:8000/", log)
-			request("http://localhost:8001/", log)
-			request("http://localhost:8002/", log)
-			request("http://localhost:8003/", log)
-			// cause a 'git pull' and rolling restart
-			request("http://localhost:9000/children/update", log)
-			// wait for the last child to have started
-			trigger(/Listening on port 8003/, function() {
-				var done = $.Progress(4),
-					step = function(body) {
-						log(body); done.finish(1)
-					}
-				// check all 4 children again
-				request("http://localhost:8000/", step)
-				request("http://localhost:8001/", step)
-				request("http://localhost:8002/", step)
-				request("http://localhost:8003/", step)
-				// Success!
-				done.then(function() {
-					log("Tests complete.")
-					cleanUp()
-				})
+			request("http://localhost:8000/", step)
+			request("http://localhost:8001/", step)
+			request("http://localhost:8002/", step)
+			request("http://localhost:8003/", step)
+			done.then(function() {
+				// cause a 'git pull' and rolling restart
+				request("http://localhost:9000/children/update", log)
+				// wait for the last child to have started
+				trigger(/Listening on port 8003/, $.once(function() {
+					var done = $.Progress(4),
+						step = function(body) {
+							try { body = JSON.parse(body) }
+							catch(err) { return done.fail(err) }
+							log(body); done.finish(1)
+						}
+					// check all 4 children again
+					request("http://localhost:8000/", step)
+					request("http://localhost:8001/", step)
+					request("http://localhost:8002/", step)
+					request("http://localhost:8003/", step)
+					done.then(function() {
+						// send an 'update' message through rabbitmq
+						log("Connecting to rabbitmq server")
+						context = Rabbit.createContext('amqp://localhost:5672')
+						context.on('ready', function() {
+							pub = context.socket('PUB')
+							log("Creating PUB socket...")
+							pub.connect('shepherd', function() {
+								log("Ready PUB socket...")
+								try { pub.write(JSON.stringify({ op: "update" }), 'utf8') }
+								catch (_err) { return log("error:", _err, _err.stack) }
+								log("Sent PUB message...")
+								trigger(/Listening on port 8003/, $.once(function() {
+									var done = $.Progress(4),
+										step = function(body) {
+											try { body = JSON.parse(body) }
+											catch(err) { return done.fail(err) }
+											log(body); done.finish(1)
+										}
+									// check all 4 children again
+									request("http://localhost:8000/", step)
+									request("http://localhost:8001/", step)
+									request("http://localhost:8002/", step)
+									request("http://localhost:8003/", step)
+									// Success!
+									done.then(function() {
+										log("Tests complete.")
+										context.close()
+										pub.close()
+										cleanUp()
+									})
+								}))
+							})
+						})
+					})
+				}))
 			})
 		})
 
