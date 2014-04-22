@@ -22,8 +22,6 @@ $ = require("bling")
 Shell = require("shelljs")
 Helpers = require("../lib/helpers")
 Request = require('request')
-
-
 log = $.logger("[test]")
 
 fail = function(err) {
@@ -59,21 +57,27 @@ $.Promise.exec("mv test/fixtures/server/_git test/fixtures/server/.git").wait(fu
 			log('shepherd.onExit', exitCode)
 		})
 
+		// wait for the master server to come online
 		trigger(/listening on master port/i, function(line) {
+			// check that all 4 children started
 			request("http://localhost:8000/", log)
 			request("http://localhost:8001/", log)
 			request("http://localhost:8002/", log)
 			request("http://localhost:8003/", log)
+			// cause a 'git pull' and rolling restart
 			request("http://localhost:9000/children/update", log)
+			// wait for the last child to have started
 			trigger(/Listening on port 8003/, function() {
 				var done = $.Progress(4),
 					step = function(body) {
 						log(body); done.finish(1)
 					}
+				// check all 4 children again
 				request("http://localhost:8000/", step)
 				request("http://localhost:8001/", step)
 				request("http://localhost:8002/", step)
 				request("http://localhost:8003/", step)
+				// Success!
 				done.then(function() {
 					log("Tests complete.")
 					cleanUp()
