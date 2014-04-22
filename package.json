@@ -19,7 +19,8 @@
     "shelljs": "latest",
     "commander": "latest",
     "express": "latest",
-    "rabbit.js": "^0.4.1"
+    "rabbit.js": "^0.4.1",
+    "handlebars": "^2.0.0-alpha.2"
   },
   "devDependencies": {
     "mocha": "latest",
