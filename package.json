@@ -1,26 +1,27 @@
 {
-	"name": "shepherd",
-	"version": "0.0.1",
-	"description": "Control a herd of wild processes.",
-	"main": "shepherd.coffee",
-	"bin": {
-		"shepherd": "bin/shepherd"
-	},
-	"scripts": {
-		"test": "mocha test/test.js"
-	},
-	"author": "Jesse Dailey <jesse.dailey@gmail.com>",
-	"repository": {
-		"type": "git",
-		"url": "git@github.ua.com:jdailey/shepherd.git"
-	},
-	"dependencies": {
-		"bling": "latest",
-		"shelljs": "latest",
-		"commander": "latest",
-		"express": "latest"
-	},
-	"devDependencies": {
-		"mocha": "latest"
-	}
+  "name": "shepherd",
+  "version": "0.0.1",
+  "description": "Control a herd of wild processes.",
+  "main": "shepherd.coffee",
+  "bin": {
+    "shepherd": "bin/shepherd"
+  },
+  "scripts": {
+    "test": "mocha test/test.js"
+  },
+  "author": "Jesse Dailey <jesse.dailey@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git@github.ua.com:jdailey/shepherd.git"
+  },
+  "dependencies": {
+    "bling": "latest",
+    "shelljs": "latest",
+    "commander": "latest",
+    "express": "latest"
+  },
+  "devDependencies": {
+    "mocha": "latest",
+    "request": "^2.34.0"
+  }
 }
