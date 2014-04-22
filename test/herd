@@ -1,8 +1,10 @@
 {
-	"command": "cd test/fixtures/server && node server.js",
+	"exec": {
+		"cd": "test/fixtures/server",
+		"cmd": "node server.js"
+	},
 	"count": 4,
 	"restart": {
-		"exitCode": 1,
 		"timeout": 10000,
 		"gracePeriod": 1000
 	}
