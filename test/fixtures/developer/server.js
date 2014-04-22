@@ -22,7 +22,7 @@ setTimeout(function() {
 		write('{"PORT": ' + process.env.PORT + ', "TOTEM": "')
 		Fs.readFile("totem", function(err, data) {
 			if( err != null ) return fail(err)
-			else finish(data + '"}')
+			else finish(String(data).replace(/(?:\n|\r)/g,'') + '"}')
 		})
 	}).listen(process.env.PORT);
 	console.log("Listening on port", process.env.PORT)
