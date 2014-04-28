@@ -11,5 +11,8 @@
 	"nginx": {
 		"config":"/usr/local/etc/nginx/conf.d/shepherd_pool.conf",
 		"reload":"launchctl stop homebrew.mxcl.nginx && launchctl start homebrew.mxcl.nginx"
+	},
+	"env": {
+		"CUSTOM_CONFIG": "value"
 	}
 }
