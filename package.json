@@ -16,11 +16,12 @@
   },
   "dependencies": {
     "bling": "latest",
-    "shelljs": "latest",
-    "commander": "latest",
-    "express": "latest",
-    "rabbit.js": "^0.4.1",
-    "handlebars": "^2.0.0-alpha.2"
+    "shelljs": "0.2.6",
+    "commander": "2.2.0",
+    "express": "4.0.0",
+    "rabbit.js": "0.4.1",
+    "handlebars": "2.0.0-alpha.2",
+    "daemon": "1.1.0"
   },
   "devDependencies": {
     "mocha": "latest",
