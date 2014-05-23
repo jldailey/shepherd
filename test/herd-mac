@@ -13,6 +13,6 @@
 		"reload":"launchctl stop homebrew.mxcl.nginx && launchctl start homebrew.mxcl.nginx"
 	},
 	"env": {
-		"CUSTOM_CONFIG": "value"
+		"NODE_ENV": "development"
 	}
 }
