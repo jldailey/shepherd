@@ -3,6 +3,7 @@
 		"cd": "test/fixtures/server",
 		"cmd": "node server.js"
 	},
+	"port": 50000,
 	"count": 4,
 	"restart": {
 		"timeout": 10000,
