@@ -5,3 +5,9 @@
 	logallrefupdates = true
 	ignorecase = true
 	precomposeunicode = true
+[remote "upstream"]
+	url = ../upstream
+	fetch = +refs/heads/*:refs/remotes/upstream/*
+[branch "master"]
+	remote = upstream
+	merge = refs/heads/master

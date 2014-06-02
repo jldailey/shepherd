@@ -13,7 +13,7 @@ setTimeout(function() {
 		}, finish = function(text) {
 			res.statusCode = 200;
 			res.contentType = "text/plain";
-			res.end(html || "")
+			res.end(text || "")
 			console.log(req.method + " " + req.url + " " + res.statusCode)
 		}
 		Fs.readFile("token", function(err, data) {
