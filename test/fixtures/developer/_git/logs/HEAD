@@ -1,8 +1,1 @@
-0000000000000000000000000000000000000000 2291671ce813dd8f96de7f0bdf6f945981a90582 Jesse Dailey <jesse.dailey@gmail.com> 1398128000 -0400	clone: from /Users/jldailey/Projects/shepherd/test/fixtures/upstream
-2291671ce813dd8f96de7f0bdf6f945981a90582 bebabd622d56085252abd9628da6f3d60e48ee9f Jesse Dailey <jesse.dailey@gmail.com> 1398129493 -0400	commit: output the HEAD commit line as well as the PORT, for testing
-bebabd622d56085252abd9628da6f3d60e48ee9f 7f51da548a7c6f16e541191456e1111abe0b5d2b Jesse Dailey <jesse.dailey@gmail.com> 1398130964 -0400	commit: add a file we can use for fake changes
-7f51da548a7c6f16e541191456e1111abe0b5d2b 50096281adcdf94d895cba40e90e955c92f573aa Jesse Dailey <jesse.dailey@gmail.com> 1398131173 -0400	commit: output the totem contents
-50096281adcdf94d895cba40e90e955c92f573aa b45f9c1ed30e18108806fc53dbfdeae62abb4389 Jesse Dailey <jesse.dailey@gmail.com> 1398131396 -0400	commit: fake change
-b45f9c1ed30e18108806fc53dbfdeae62abb4389 ac49676677e53070098a5e42cd728de2918f671a Jesse Dailey <jesse.dailey@gmail.com> 1398184911 -0400	commit: clean the totem data before sending
-ac49676677e53070098a5e42cd728de2918f671a 3d6a5c717c8e7b7ff40d60351dbc2df7d233ff5f Jesse Dailey <jesse.dailey@gmail.com> 1398209275 -0400	commit: shorten the startup delay
-3d6a5c717c8e7b7ff40d60351dbc2df7d233ff5f bc2987e54a5759c29ee4eb6dfaa67f7a745333a2 Jesse Dailey <jesse.dailey@gmail.com> 1398209399 -0400	commit: fake change
+0000000000000000000000000000000000000000 82f338ba5af0b57b49773c54030b6c40f9a50084 Jesse Dailey <jesse.dailey@gmail.com> 1401746681 -0400	commit (initial): initial commit
