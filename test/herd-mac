@@ -1,10 +1,13 @@
 {
 	"exec": {
+		"count": 3,
+		"port": 8001,
 		"cd": "test/fixtures/server",
 		"cmd": "node server.js"
 	},
-	"port": 50000,
-	"count": 4,
+	"http": {
+		"port": 9000
+	},
 	"restart": {
 		"timeout": 10000,
 		"gracePeriod": 1000

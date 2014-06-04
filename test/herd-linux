@@ -1,16 +1,16 @@
 {
 	"exec": {
+		"count": 3,
+		"port": 8001,
 		"cd": "test/fixtures/server",
 		"cmd": "node server.js"
 	},
-	"count": 4,
-	"port": 8090,
 	"restart": {
 		"timeout": 10000,
 		"gracePeriod": 1000
 	},
 	"http": {
-		"port": 8100
+		"port": 9000
 	},
 	"nginx": {
 		"config":"/etc/nginx/conf.d/shepherd_pool.conf",
