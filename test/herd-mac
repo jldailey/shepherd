@@ -5,8 +5,8 @@
 		"cd": "test/fixtures/server",
 		"cmd": "node server.js"
 	},
-	"http": {
-		"port": 9000
+	"admin": {
+		"port": 9001
 	},
 	"restart": {
 		"timeout": 10000,
