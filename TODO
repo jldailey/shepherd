@@ -1,13 +1,15 @@
 
-support more than one -f (start more than one Herd instance)
-	- make an explicit check that they don't clash on admin port
-	- and that the pools don't overlap ports
-support count < 0 (means count: -3 means numCpu - 3)
-	- "exec": { ..., "count": -1 }
-support a custom nginx upstream name per pool (currently hardcoded to "shepherd_pool")
-	- "nginx": { "upstream": "shepherd_pool" }
+x support more than one server type to be launched
+x	- and that the pools don't overlap ports
+
+x support count < 0 (means count: -3 means numCpu - 3)
+x - "exec": { ..., "count": -1 }
+
+x support a custom nginx upstream name per pool (currently hardcoded to "shepherd_pool")
+x - "nginx": { "upstream": "shepherd_pool" }
+
 support custom "server" lines within the pool definition (via handlebars)
 	- server {{server}} max_fails=2 foo=bar;
 
-(optional) pull all the webRoute stuff out so it supports multiple Herds
-	- new Herd instances would register somewhere global
+x (optional) pull all the webRoute stuff out so it supports multiple Herds
+x		- new Herd instances would register somewhere global
