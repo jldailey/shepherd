@@ -32,7 +32,7 @@ class Server
 					@process = Shell.exec cmd, { silent: true, async: true }, $.identity
 					@process.on "exit", (err, code) => @onExit code
 					on_data = (prefix) => (data) =>
-						for line in $(data.split /\n/) when line.length
+						for line in $(String(data).split /\n/) when line.length
 							@log prefix + line
 					@process.stdout.on "data", on_data ""
 					@process.stderr.on "data", on_data "(stderr) "
@@ -71,3 +71,43 @@ class Server
 			ret += "#{key}=\"#{val}\" "
 		ret += "#{self.opts.portVariable}=\"#{self.port}\""
 		return ret
+
+	@defaults = (opts) -> # make sure each server block in the config has the minimum defaults
+
+		opts = $.extend Object.create(null), {
+			cd: "."
+			cmd: "node index.js"
+			count: Math.max(1, Os.cpus().length - 1)
+			port: 8000, # a starting port, each child after the first will increment this
+			portVariable: "PORT", # and set it in the env using this variable
+			poolName: "shepherd_pool"
+			env: {}
+		}, opts
+
+		opts.port = parseInt opts.port, 10
+		opts.count = parseInt opts.count, 10
+
+		while opts.count < 0
+			opts.count += Os.cpus().length
+		opts.count or= 1
+
+		# control what happens at (re)start time
+		opts.restart = $.extend Object.create(null), {
+			maxAttempts: 5, # failing five times fast is fatal
+			maxInterval: 10000, # in what interval is "fast"?
+			gracePeriod: 3000, # how long to wait for a forcibly killed process to die
+			timeout: 10000, # how long to wait for a newly launched process to start listening on it's port
+		}, opts.restart
+
+		opts.git = $.extend Object.create(null), {
+			cd: "."
+			remote: "origin"
+			branch: "master"
+			command: "git pull {{remote}} {{branch}} || git merge --abort"
+		}, opts.git
+
+		opts.git.command = Handlebars.compile(opts.git.command)
+		opts.git.command.inspect = (level) ->
+			return '"' + opts.git.command({ remote: "{{remote}}", branch: "{{branch}}" }) + '"'
+
+		return opts

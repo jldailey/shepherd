@@ -4,6 +4,10 @@
 	].map require
 log = $.logger("[herd]")
 
+die = ->
+	log.apply null, arguments
+	process.exit 1
+
 # clean all non-simple stuff out of an object
 sanitizeObject = (obj) -> JSON.parse JSON.stringify obj
 
@@ -132,61 +136,35 @@ Herd.defaults = (opts) ->
 	# the above has two effects: allows calling without arguments
 	# and ensures that the opts object can't be polluted by Object.prototype
 
-	if 'exec' in opts
-		opts.server = opts.exec
-		delete opts.exec
-
-	if $.is 'object', opts.servers
-		opts.servers = [ opts.servers ]
-	else if $.is 'object', opts.server
-		opts.servers = [ opts.server ]
-	else if $.is 'array', opts.server
-		opts.servers = opts.server
+	# handle all the optional ways to specify the servers to launch
+	# { 'exec': { ... } }
+	# { 'server': { ... } }
+	# { 'servers': [ ... ] }
+	# at the end, we will have it in the form of { 'servers': [ ... ] }
+	opts.servers = switch
+		when $.is 'object', opts.exec then [ opts.exec ]
+		when $.is 'object', opts.server then [ opts.server ]
+		when $.is 'array', opts.exec then opts.exec
+		when $.is 'array', opts.server then opts.server
+		else opts.servers
+	unless $.is 'array', opts.servers
+		die "Invalid value for 'servers' in config json", opts
+	delete opts.exec
 	delete opts.server
+	opts.servers = $(opts.servers).map(Server.defaults)
 
-	if not $.is 'array', opts.servers
-		log "Invalid value for 'servers' in config json", opts
-		process.exit 1
-
-	opts.servers = $(opts.servers).map((server) ->
-
-		server = $.extend Object.create(null), {
-			cd: "."
-			cmd: "node index.js"
-			count: Math.max(1, Os.cpus().length - 1)
-			port: 8000, # a starting port, each child after the first will increment this
-			portVariable: "PORT", # and set it in the env using this variable
-			env: {}
-		}, server
-
-		server.port = parseInt server.port, 10
-		server.count = parseInt server.count, 10
-
-		while server.count < 0
-			server.count += Os.cpus().length
-
-		# control what happens at (re)start time
-		server.restart = $.extend Object.create(null), {
-			maxAttempts: 5, # failing five times fast is fatal
-			maxInterval: 10000, # in what interval is "fast"?
-			gracePeriod: 3000, # how long to wait for a forcibly killed process to die
-			timeout: 10000, # how long to wait for a newly launched process to start listening on it's port
-		}, server.restart
-
-		server.git = $.extend Object.create(null), {
-			remote: "origin"
-			branch: "master"
-			command: "git pull {{remote}} {{branch}} || git merge --abort"
-		}, server.git
-
-		server.git.command = Handlebars.compile(server.git.command)
-		server.git.command.inspect = (level) ->
-			return '"' + server.git.command({ remote: "{{remote}}", branch: "{{branch}}" }) + '"'
-
-		return server
-
-	)
-
+	# handle all the optional ways to specify the workers to launch
+	# { 'worker': { ... } }
+	# { 'workers': [ ... ] }
+	# at the end, we will have it in the form of { 'workers': [ ... ] }
+	opts.workers = switch
+		when $.is 'object', opts.worker then [ opts.worker ]
+		when $.is 'array', opts.worker then opts.worker
+		else opts.workers
+	unless $.is 'array', opts.workers
+		die "Invalid value for 'workers' in config json", opts
+	delete opts.worker
+	opts.workers = $(opts.workers).map Worker.defaults
 
 	opts.rabbitmq = $.extend Object.create(null), {
 		enabled: true
@@ -198,7 +176,7 @@ Herd.defaults = (opts) ->
 		when 'darwin'
 			opts.nginx = $.extend Object.create(null), {
 				config: "/usr/local/etc/nginx/conf.d/shepherd_pool.conf"
-				reload: "launchctl stop homebrew.mxcl.nginx && launchctl start homebrew.mxcl.nginx" # only used if nginx.config is set to a writeable filename
+				reload: "launchctl stop homebrew.mxcl.nginx && launchctl start homebrew.mxcl.nginx"
 			}, opts.nginx
 			break
 		when 'linux'
@@ -218,23 +196,6 @@ Herd.defaults = (opts) ->
 		port: 9000
 	}, opts.admin
 
-	# "worker" can be set in the config json
-	# but it just morphs into the "workers" array with one item in it
-	if $.is 'object', opts.worker
-		opts.workers = [ opts.worker ]
-		delete opts.worker
-	# and then "worker" becomes read-only (see: "workers" array)
-	$.defineProperty opts, "worker",
-		get: -> return opts.workers[0]
-
-	if not $.is 'array', opts.workers
-		opts.workers = []
-
-	opts.workers = $(opts.workers).map (w) -> $.extend Object.create(null), {
-		count: 1
-		cd: "."
-		cmd: "echo No worker cmd specified"
-	}, w
 
 	if Opts.verbose then log "Using configuration:", require('util').inspect(opts)
 
@@ -243,7 +204,7 @@ Herd.defaults = (opts) ->
 connectSignals = (self) ->
 
 	clean_exit = -> log "Exiting clean..."; process.exit 0
-	dirty_exit = (err) -> console.log(err); process.exit 1
+	dirty_exit = (err) -> console.error(err); process.exit 1
 
 	# on SIGINT or SIGTERM, kill everything and die
 	for sig in ["SIGINT", "SIGTERM"]
