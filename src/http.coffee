@@ -1,10 +1,10 @@
-$ = require('bling'),
-Express = require('express'),
-Http = require('http'),
-Helpers = require('./helpers'),
-Opts = require("./opts"),
-log = $.logger("[http]"),
-app = Express()
+$       = require 'bling'
+Express = require 'express'
+Http    = require 'http'
+Helpers = require './helpers'
+Opts    = require "./opts"
+log     = $.logger "[http]"
+app     = Express()
 
 app.get "/", (req, res) ->
 	Helpers.jsonFile("../package.json").then (pkg) ->
