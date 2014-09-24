@@ -1,0 +1,12 @@
+{
+	"server": {
+		"count": 2,
+		"port": 8001,
+		"cd": "test/server",
+		"cmd": "node server.js",
+		"poolName": "pool_one"
+	},
+	"admin": { "port": 9001 },
+	"nginx": { "enabled": false },
+	"rabbitmq": { "enabled": false }
+}
