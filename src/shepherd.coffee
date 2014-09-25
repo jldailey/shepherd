@@ -25,7 +25,7 @@ if Opts.O isnt "-"
 		try outStream.write _slice.call(arguments, 0).join(' ') + "\n", 'utf8'
 		catch err then _die "Failed to write to", Opts.O, err.stack
 
-Helpers.jsonFile(Opts.F).then ((config) ->
+Helpers.readJson(Opts.F).then ((config) ->
 	log "Starting new herd, shepherd PID: " + process.pid
 	new Herd(config).start()
 ), (err) ->
