@@ -5,3 +5,7 @@ all: $(JS_FILES)
 lib/%.js: src/%.coffee
 	coffee -o lib -c $<
 
+test: $(JS_FILES)
+	./test/test-one.sh
+
+.PHONY: test
