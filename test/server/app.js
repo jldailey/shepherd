@@ -3,7 +3,7 @@ Shell = require('shelljs')
 Fs = require('fs')
 $ = require('bling')
 
-setTimeout(function() {
+$.delay(500, function() { // add an artificial startup delay
 	Http.createServer(function(req, res) {
 		var fail = function(err) {
 			res.statusCode = 500;
@@ -22,4 +22,4 @@ setTimeout(function() {
 		})
 	}).listen(process.env.PORT);
 	console.log("Listening on port", process.env.PORT)
-}, 500) // add an artificial startup delay
+})
