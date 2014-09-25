@@ -7,13 +7,9 @@ class Worker
 			opts: opts
 			index: index or 0
 			process: null
-			started: $.Promise()
-		$.extend @started,
-			attempts: 0
-			timeout: 0
-		@started.attempts = 0
-		@started.timeout = null
-		@started = $.Promise()
+			started: $.extend $.Promise(),
+				attempts: 0
+				timeout: null
 		@log = $.logger("worker[" + this.index + "]")
 
 	spawn: ->
@@ -21,6 +17,7 @@ class Worker
 		try return @started
 		finally
 			cmd = "bash -c 'cd #{@opts.cd} && #{@opts.cmd}'"
+			@log "shell >", cmd
 			@process = Shell.exec cmd, { silent: true, async: true }, $.identity
 			@process.on "exit", (err, code) => @onExit(code)
 			on_data = (prefix) => (data) =>
