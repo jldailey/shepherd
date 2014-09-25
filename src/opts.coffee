@@ -6,7 +6,7 @@ require("bling").extend module.exports, require("commander")
 	.option '--defaults', "Output the default configuration."
 	.option '--daemon', "Run in the background."
 	.option '-p [file]', "The .pid file to use (if a daemon).", "shepherd.pid"
-	.option '--verbose', "Verbose mode."
+	.option '-v --verbose', "Verbose mode."
 	.parse process.argv
 
 
