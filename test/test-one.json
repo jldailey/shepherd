@@ -3,8 +3,8 @@
 		"count": 2,
 		"port": 8001,
 		"cd": "test/server",
-		"cmd": "node server.js",
-		"poolName": "pool_one"
+		"cmd": "node app.js",
+		"poolName": "shepherd_pool"
 	},
 	"admin": { "port": 9001 },
 	"nginx": { "enabled": false },
