@@ -1,7 +1,9 @@
 $       = require 'bling'
+Os      = require "os"
 Shell   = require 'shelljs'
 Process = require './process'
 Helpers = require './helpers'
+Handlebars = require "handlebars"
 module.exports = \
 class Server
 	constructor: (opts, index) ->
@@ -10,10 +12,9 @@ class Server
 			index: index or 0
 			port: opts.port + (index or 0)
 			process: null
-			started: $.Promise()
-		$.extend @started,
-			attempts: 0
-			timeout: null
+			started: $.extend $.Promise(),
+				attempts: 0
+				timeout: null
 		@log = $.logger @toString()
 
 	spawn: ->
@@ -21,14 +22,15 @@ class Server
 		finally
 			cmd = ""
 			@started.reset()
+			@started.then => @log "Fully started."
 			@log "Spawning..."
 			Process.findOne({ ports: @port }).then (owner) =>
 				if owner? # if the port is being listened on
 					@log "Killing previous owner of", @port, "PID:", owner.pid
-					owner.kill "SIGKILL" # send kill signal that cant be refused
-					$.delay @opts.restart.gracePeriod, => @spawn()
+					Process.killTree(owner, "SIGKILL").then => @spawn()
 				else
 					cmd = "#{makeEnvString @} bash -c 'cd #{@opts.cd} && #{@opts.cmd}'"
+					@log "shell >", cmd
 					@process = Shell.exec cmd, { silent: true, async: true }, $.identity
 					@process.on "exit", (err, code) => @onExit code
 					on_data = (prefix) => (data) =>
@@ -72,14 +74,14 @@ class Server
 		ret += "#{self.opts.portVariable}=\"#{self.port}\""
 		return ret
 
-	@defaults = (opts) -> # make sure each server block in the config has the minimum defaults
+	@defaults = (opts) -> # make sure each server block in the configuration has the minimum defaults
 
 		opts = $.extend Object.create(null), {
 			cd: "."
 			cmd: "node index.js"
-			count: Math.max(1, Os.cpus().length - 1)
+			count: -1
 			port: 8000, # a starting port, each child after the first will increment this
-			portVariable: "PORT", # and set it in the env using this variable
+			portVariable: "PORT", # and set it in the environment using this variable
 			poolName: "shepherd_pool"
 			env: {}
 		}, opts
@@ -99,13 +101,14 @@ class Server
 			timeout: 10000, # how long to wait for a newly launched process to start listening on it's port
 		}, opts.restart
 
+		# defaults for the git configuration
 		opts.git = $.extend Object.create(null), {
+			enabled: false
 			cd: "."
 			remote: "origin"
 			branch: "master"
 			command: "git pull {{remote}} {{branch}} || git merge --abort"
 		}, opts.git
-
 		opts.git.command = Handlebars.compile(opts.git.command)
 		opts.git.command.inspect = (level) ->
 			return '"' + opts.git.command({ remote: "{{remote}}", branch: "{{branch}}" }) + '"'
