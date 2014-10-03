@@ -2,7 +2,7 @@
 	[ 'bling', 'os', 'fs', 'handlebars', 'shelljs',
 		'./process', './child', './http', './opts'
 	].map require
-log = $.logger("[herd]")
+log = $.logger "[herd]"
 verbose = -> if Opts.verbose then log.apply null, arguments
 
 die = ->
@@ -16,9 +16,11 @@ module.exports = class Herd
 		@shepherdId = [Os.hostname(), @opts.admin.port].join(":")
 		@children = []
 		for opts in @opts.servers
-			@children.push new Server opts
+			for index in [0...opts.count] by 1
+				@children.push new Server opts, index
 		for opts in @opts.workers
-			@children.push new Worker opts
+			for index in [0...opts.count] by 1
+				@children.push new Worker opts, index
 
 		Http.get "/", (req, res) ->
 			Helpers.readJson "../package.json", (err, data) ->
@@ -35,23 +37,13 @@ module.exports = class Herd
 	start: (p = $.Promise()) ->
 		try return p
 		finally listen(@).then (=> # start the admin server
-			log "Admin server listening..."
+			log "Admin server listening on port:", @opts.admin.port
 			if checkConflict @opts.servers
 				p.reject "port range conflict in servers"
 			else
-				all = $.Progress 1
-				if @children?.length
-					for child in @children ? []
-						all.include Process.killTree child, "SIGKILL"
-				else
-					for server in @opts.servers
-						@children.push child = new type_handlers[server.type](server, @children.length)
-						all.include child.started
-				all.finish(1).then p.resolve, p.reject
-
-			writeConfig(@).then (=> # write the nginx configuration
-				@restart().then p.resolve, p.reject
-			), p.reject
+				writeConfig(@).then (=> # write the nginx configuration
+					@restart().then p.resolve, p.reject
+				), p.reject
 		), p.reject
 
 	stop: (signal) ->
@@ -67,21 +59,25 @@ module.exports = class Herd
 		try return done
 		finally
 			next = => @restart from + 1, done
-			verbose "Rolling restart:", from
 			child = @children[from]
 			switch
 				# if the from index is past the end
-				when from >= @children.length then done.resolve()
+				when from >= @children.length
+					verbose "Rolling restart finished."
+					done.resolve()
 				# if there is no such server
 				when not child? then done.reject "invalid child index: #{from}"
-				when not child.process? then child.start().then next, done.reject
+				when not child.process? then verbose "Rolling start:", from, child.start().then next, done.reject
 				# else, an old child process is running
-				else Process.killTree(child.process.pid, "SIGTERM").wait child.opts.restart.gracePeriod, (err) ->
-					if err is "timeout"
-						log "Child failed to die within #{child.opts.restart.gracePeriod}ms, escalating to SIGKILL"
-						Process.killTree(child.process.pid, "SIGKILL").then -> child.started.then next, done.reject
-					else if err then done.reject err
-					else child.started.then next, done.reject
+				else
+					log "Killing existing process", child.process.pid
+					Process.killTree(child.process.pid, "SIGTERM").wait child.opts.restart.gracePeriod, (err) ->
+						if err is "timeout"
+							log "Child failed to die within #{child.opts.restart.gracePeriod}ms, escalating to SIGKILL"
+							Process.killTree(child.process.pid, "SIGKILL")
+								.then -> child.started.then next, done.reject
+						else if err then done.reject err
+						else child.started.then next, done.reject
 
 	writeConfig = (self) ->
 		nginx = self.opts.nginx
