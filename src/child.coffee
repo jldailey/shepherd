@@ -5,6 +5,7 @@ Process = require './process'
 Helpers = require './helpers'
 Http    = require './http'
 Handlebars = require "handlebars"
+log = $.logger "[child]"
 
 class Child
 	constructor: (opts, index) ->
@@ -18,15 +19,15 @@ class Child
 			log: $.logger @toString()
 
 	start: ->
-		try return @started.reset()
+		try return @started
 		finally
-			@started.then (=> @log "Child::start() finished."), (err) => @log "Child::start() failed:", err
+			# @started.then (=> log "Child::start() finished.", @started), (err) -> log "Child::start() failed:", err
 			if ++@started.attempts > @opts.restart.maxAttempts
-				@started.reject "Child::start() too many attempts"
+				@started.reject "too many attempts"
 			else
 				clearTimeout @started.timeout
 				@started.timeout = setTimeout (=> @started.attempts = 0), @opts.restart.maxInterval
-				@log "shell > " , cmd = "env #{@env()} bash -c 'cd #{@opts.cd} && #{@opts.command}'"
+				log "shell >" , cmd = "env #{@env()} bash -c 'cd #{@opts.cd} && #{@opts.command}'"
 				@process = Shell.exec cmd, { silent: true, async: true }, $.identity
 				@process.on "exit", (code) => @onExit code
 				on_data = (prefix = "") => (data) =>
@@ -52,6 +53,7 @@ class Child
 		finally unless @process? then @start().then p.resolve, p.reject
 		else Process.killTree(process, "SIGKILL").then (=>
 			@process = null
+			@started.reset()
 			@start p
 		), p.reject
 
@@ -121,13 +123,13 @@ class Worker extends Child
 		res.redirect 302, "/workers?restarting"
 	workers = []
 
-	constructor: (opts) ->
+	constructor: (opts, index) ->
 		Child.apply @, [
 			opts = Worker.defaults opts,
-			workers.length
+			index
 		]
 		workers.push @
-		@log = $.logger "worker[#{@index}]"
+		@log = $.logger "worker(#{@opts.cd})[#{@index}]"
 
 	Worker.defaults = Child.defaults
 
@@ -148,13 +150,13 @@ class Server extends Child
 	# a map of base port to all Server instances based on that port
 	servers = {}
 
-	constructor: (opts) ->
+	constructor: (opts, index) ->
 		Child.apply @, [
 			opts = Server.defaults opts,
-			index = servers[opts.port]?.length ? 0,
+			index
 		]
 		@port = opts.port + index
-		@log = $.logger "server[:#{@port}]"
+		@log = $.logger "server(#{@opts.cd})[:#{@port}]"
 		(servers[opts.port] ?= []).push @
 
 	# wrap the default start function
@@ -170,7 +172,7 @@ class Server extends Child
 						@start()
 				else # port is available, so really start
 					_start.apply(@)
-					@log "Waiting for port", @port, "to be owned by", @process.pid
+					log "Waiting for port", @port, "to be owned by", @process.pid
 					Helpers.portIsOwned(@process.pid, @port, @opts.restart.timeout)
 						.then @started.resolve, @started.reject
 
