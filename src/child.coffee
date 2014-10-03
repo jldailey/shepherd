@@ -3,90 +3,85 @@ Os      = require "os"
 Shell   = require 'shelljs'
 Process = require './process'
 Helpers = require './helpers'
+Http    = require './http'
 Handlebars = require "handlebars"
-module.exports = \
-class Server
+
+class Child
 	constructor: (opts, index) ->
 		$.extend @,
 			opts: opts
-			index: index or 0
-			port: opts.port + (index or 0)
+			index: index
 			process: null
 			started: $.extend $.Promise(),
 				attempts: 0
 				timeout: null
-		@log = $.logger @toString()
+			log: $.logger @toString()
 
-	spawn: ->
-		try return @started
+	start: ->
+		try return @started.reset()
 		finally
-			cmd = ""
-			@started.reset()
-			@started.then => @log "Fully started."
-			@log "Spawning..."
-			Process.findOne({ ports: @port }).then (owner) =>
-				if owner? # if the port is being listened on
-					@log "Killing previous owner of", @port, "PID:", owner.pid
-					Process.killTree(owner, "SIGKILL").then => @spawn()
-				else
-					cmd = "#{makeEnvString @} bash -c 'cd #{@opts.cd} && #{@opts.cmd}'"
-					@log "shell >", cmd
-					@process = Shell.exec cmd, { silent: true, async: true }, $.identity
-					@process.on "exit", (err, code) => @onExit code
-					on_data = (prefix) => (data) =>
-						for line in $(String(data).split /\n/) when line.length
-							@log prefix + line
-					@process.stdout.on "data", on_data ""
-					@process.stderr.on "data", on_data "(stderr) "
-					@log "Waiting for port", @port, "to be owned by", @process.pid
-					Helpers.portIsOwned(@process.pid, @port, @opts.restart.timeout) \
-						.then @started.resolve, @started.reject
+			@started.then (=> @log "Child::start() finished."), (err) => @log "Child::start() failed:", err
+			if ++@started.attempts > @opts.restart.maxAttempts
+				@started.reject "Child::start() too many attempts"
+			else
+				clearTimeout @started.timeout
+				@started.timeout = setTimeout (=> @started.attempts = 0), @opts.restart.maxInterval
+				@log "shell > " , cmd = "env #{@env()} bash -c 'cd #{@opts.cd} && #{@opts.command}'"
+				@process = Shell.exec cmd, { silent: true, async: true }, $.identity
+				@process.on "exit", (code) => @onExit code
+				on_data = (prefix = "") => (data) =>
+					for line in String(data).split /\n/ when line.length
+						@log prefix + line
+				@process.stdout.on "data", on_data ""
+				@process.stderr.on "data", on_data "(stderr) "
+				unless @process.pid then @started.reject "no pid"
+				# IMPORTANT NOTE: does not resolve @started on it's own,
+				# a sub-class like Server or Worker is expected to @started.resolve()
 
-	kill: (signal) ->
+	stop: (signal) ->
+		@started.attempts = Infinity
 		try return p = $.Promise()
 		finally
 			unless @process? then p.reject 'no process'
 			else
 				@process.on 'exit', p.resolve
-				@process.kill signal
+				Process.kill @process.pid, signal
+
+	restart: (p) ->
+		try return p ?= $.Promise()
+		finally unless @process? then @start().then p.resolve, p.reject
+		else Process.killTree(process, "SIGKILL").then (=>
+			@process = null
+			@start p
+		), p.reject
 
 	onExit: (exitCode) ->
 		return unless @process?
-		@log("Server PID: " + @process.pid + " Exited with code: ", exitCode)
+		@log "Child PID: #{@process.pid} exited:", exitCode
 		# Record the death of the child
 		@process = null
 		# if it died with a restartable exit code, attempt to restart it
-		if exitCode isnt "SIGKILL" and @started.attempts < @opts.restart.maxAttempts
-			@started.attempts += 1
-			# schedule the forgetting of start attempts
-			clearTimeout @started.timeout
-			@started.timeout = setTimeout (=> @started.attempts = 0), @opts.restart.maxInterval
-			# attempt a restart
-			@spawn()
+		if exitCode isnt 0
+			@start()
 
-	toString: -> "[server:"+@port+"]"
-	inspect:  -> "[server:"+@port+"]"
+	toString: -> "[(#{@process?.pid}):#{@port}]"
+	inspect:  -> "[(#{@process?.pid}):#{@port}]"
 
-	makeEnvString = (self) ->
+	env: ->
 		ret = ""
-		for key,val of self.opts.env when val?
+		for key,val of @opts.env when val?
 			ret += "#{key}=\"#{val}\" "
-		ret += "#{self.opts.portVariable}=\"#{self.port}\""
 		return ret
 
-	@defaults = (opts) -> # make sure each server block in the configuration has the minimum defaults
+	Child.defaults = (opts) -> # make sure each server block in the configuration has the minimum defaults
 
 		opts = $.extend Object.create(null), {
 			cd: "."
-			cmd: "node index.js"
+			command: "node index.js"
 			count: -1
-			port: 8000, # a starting port, each child after the first will increment this
-			portVariable: "PORT", # and set it in the environment using this variable
-			poolName: "shepherd_pool"
 			env: {}
 		}, opts
 
-		opts.port = parseInt opts.port, 10
 		opts.count = parseInt opts.count, 10
 
 		while opts.count < 0
@@ -114,3 +109,89 @@ class Server
 			return '"' + opts.git.command({ remote: "{{remote}}", branch: "{{branch}}" }) + '"'
 
 		return opts
+
+class Worker extends Child
+	Http.get "/workers", (req, res) ->
+		return "[" +
+			("[#{worker.process?.pid ? "DEAD"}, :#{worker.port}]" for worker in workers).join ",\n"
+		+ "]"
+	Http.get "/workers/restart", (req, res) ->
+		for worker in workers
+			worker.restart()
+		res.redirect 302, "/workers?restarting"
+	workers = []
+
+	constructor: (opts) ->
+		Child.apply @, [
+			opts = Worker.defaults opts,
+			workers.length
+		]
+		workers.push @
+		@log = $.logger "worker[#{@index}]"
+
+	Worker.defaults = Child.defaults
+
+class Server extends Child
+	Http.get "/servers", (req, res) ->
+		ret = "["
+		for port,servers of servers
+			for server in servers
+				ret += "[#{server.process?.pid ? "DEAD"}, :#{server.port}],\n"
+		ret += "]"
+		res.pass ret
+	Http.get "/servers/restart", (req, res) ->
+		for port,v of servers
+			for server in v
+				server.restart()
+		res.redirect 302, "/servers?restarting"
+
+	# a map of base port to all Server instances based on that port
+	servers = {}
+
+	constructor: (opts) ->
+		Child.apply @, [
+			opts = Server.defaults opts,
+			index = servers[opts.port]?.length ? 0,
+		]
+		@port = opts.port + index
+		@log = $.logger "server[:#{@port}]"
+		(servers[opts.port] ?= []).push @
+
+	# wrap the default start function
+	start: () ->
+		try return @started
+		finally
+			_start = Child::start
+			# find any process that is listening on our port
+			Process.clearCache().findOne({ ports: @port }).then (owner) =>
+				if owner? # if the port is being listened on
+					@log "Killing previous owner of", @port, "PID:", owner.pid
+					Process.killTree(owner, "SIGKILL").then =>
+						@start()
+				else # port is available, so really start
+					_start.apply(@)
+					@log "Waiting for port", @port, "to be owned by", @process.pid
+					Helpers.portIsOwned(@process.pid, @port, @opts.restart.timeout)
+						.then @started.resolve, @started.reject
+
+	stop: ->
+		Child::stop.apply(@)
+		try return p = $.Promise()
+		finally if @process
+			Process.killTree(@process.pid, "SIGTERM").then p.resolve, p.reject
+		else p.resolve()
+
+	env: ->
+		ret = Child::env.apply @
+		ret += "#{@opts.portVariable}=\"#{@port}\""
+		ret
+	Server.defaults = (opts) ->
+		opts = $.extend {
+			port: 8001
+			portVariable: "PORT"
+			poolName: "shepherd_pool"
+		}, Child.defaults opts
+		opts.port = parseInt opts.port, 10
+		opts
+
+$.extend module.exports, { Server, Worker }
