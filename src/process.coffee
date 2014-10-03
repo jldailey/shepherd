@@ -5,10 +5,10 @@ Process = module.exports
 
 log = $.logger "[Process]"
 
-Process.exec = (cmd) ->
+Process.exec = (cmd, verbose) ->
 	try return p = $.Promise()
 	finally
-		log "shell >", cmd
+		if verbose then log "shell >", cmd
 		ret = { output: "" }
 		child = Shell.exec cmd, { silent: true, async: true }, (exitCode) ->
 			if exitCode isnt 0 then p.reject ret.output
@@ -105,7 +105,7 @@ Process.signals = signals = {
 Process.getSignalNumber = (signal) ->
 	signals[signal] ? (if $.is 'number', signal then signal else 15)
 
-Process.kill = (pid, signal) -> Process.exec "kill -#{Process.getSignalNumber signal} #{pid}"
+Process.kill = (pid, signal) -> Process.exec "kill -#{Process.getSignalNumber signal} #{pid}", true
 
 Process.tree = (proc) ->
 	try return q = $.Promise()
@@ -133,8 +133,9 @@ Process.killTree = (proc, signal) ->
 		signal = Process.getSignalNumber(signal)
 		Process.tree(proc).then ((tree) ->
 			Process.walk tree, (node) ->
-				log("Death is visiting:", node.pid, "with signal", signal)
-				Process.kill node.pid, signal
+				if node.pid
+					log("Death is visiting:", node.pid, "with signal", signal)
+					Process.kill node.pid, signal
 			p.resolve()
 		), p.reject
 
@@ -143,9 +144,11 @@ Process.summarize = (proc) ->
 	try return p = $.Promise()
 	finally Process.tree(proc).then (tree) ->
 		Process.walk tree, (node) ->
-			proc.rss += node.rss
+			proc.rss += node.rss # sum values upwards
 			proc.cpu += node.cpu
-		p.resolve proc
+			node.rss = proc.rss # and push the result down
+			node.cpu = proc.cpu
+		p.resolve tree
 
 Process.printTree = (proc, indent, spacer) ->
 	spacer or= "\\_"
