@@ -6,6 +6,6 @@ lib/%.js: src/%.coffee
 	coffee -o lib -c $<
 
 test: $(JS_FILES)
-	./test/test-startup.sh
+	./test/simple-startup.sh
 
 .PHONY: test
