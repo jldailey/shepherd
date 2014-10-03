@@ -2,6 +2,8 @@ Http = require('http')
 Shell = require('shelljs')
 Fs = require('fs')
 $ = require('bling')
+console.log("Test Server starting on PID:", process.pid)
+process.on("SIGHUP", function() { process.exit(0) })
 
 $.delay(500, function() { // add an artificial startup delay
 	Http.createServer(function(req, res) {
