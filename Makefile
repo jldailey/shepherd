@@ -7,5 +7,6 @@ lib/%.js: src/%.coffee
 
 test: $(JS_FILES)
 	./test/simple-startup.sh
+	./test/restart-single.sh
 
 .PHONY: test
