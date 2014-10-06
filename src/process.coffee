@@ -131,6 +131,9 @@ Process.killTree = (proc, signal) ->
 	try return p = $.Promise()
 	finally
 		signal = Process.getSignalNumber(signal)
+		proc = switch $.type(proc)
+			when 'string','number' then { pid: proc }
+			else proc
 		Process.tree(proc).then ((tree) ->
 			Process.walk tree, (node) ->
 				if node.pid
