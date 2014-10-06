@@ -33,7 +33,7 @@ PID=`cat $PID_FILE`
 echo "Asking to restart..."
 kill -1 $PID
 echo -n "Waiting"
-for i in `seq 1 10`; do
+for i in `seq 1 6`; do
 	echo -n "...$i"
 	sleep 1
 done
