@@ -1,6 +1,6 @@
 Opts    = require './opts'
 if Opts.daemon
-	do require 'daemon' # fork into the background
+	require('daemon')({ stderr: process.stderr }) # fork into the background
 $       = require "bling",
 Shell   = require "shelljs"
 Fs      = require "fs"
