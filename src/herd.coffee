@@ -2,7 +2,7 @@
 	[ 'bling', 'os', 'fs', 'handlebars', 'shelljs',
 		'./process', './child', './http', './opts'
 	].map require
-log = $.logger "[herd]"
+log = $.logger "[herd-#{$.random.string 4}]"
 verbose = -> if Opts.verbose then log.apply null, arguments
 
 die = ->
@@ -56,28 +56,19 @@ module.exports = class Herd
 			p.finish(1).then (-> log "Fully stopped."), (err) -> log "Failed to stop:", err
 
 	restart: (from = 0, done = $.Promise()) -> # perform a careful rolling restart
+		if from is 0 then verbose "Rolling restart starting..."
 		try return done
 		finally
 			next = => @restart from + 1, done
 			child = @children[from]
-			switch
+			switch true
 				# if the from index is past the end
 				when from >= @children.length
 					verbose "Rolling restart finished."
 					done.resolve()
 				# if there is no such server
 				when not child? then done.reject "invalid child index: #{from}"
-				when not child.process? then verbose "Rolling start:", from, child.start().then next, done.reject
-				# else, an old child process is running
-				else
-					log "Killing existing process", child.process.pid
-					Process.killTree(child.process.pid, "SIGTERM").wait child.opts.restart.gracePeriod, (err) ->
-						if err is "timeout"
-							log "Child failed to die within #{child.opts.restart.gracePeriod}ms, escalating to SIGKILL"
-							Process.killTree(child.process.pid, "SIGKILL")
-								.then -> child.started.then next, done.reject
-						else if err then done.reject err
-						else child.started.then next, done.reject
+				else verbose "Rolling restart:", from, child.restart().then next, done.reject
 
 	writeConfig = (self) ->
 		nginx = self.opts.nginx
@@ -120,7 +111,11 @@ module.exports = class Herd
 
 		# on SIGHUP, just reload all child procs
 		process.on "SIGHUP", ->
+			log "Got signal: SIGHUP... reloading."
 			self.restart()
+
+		process.on "exit", (code) ->
+			console.log "process.on exit,", code
 
 	connectRabbit = (self) ->
 		r = self.opts.rabbitmq
