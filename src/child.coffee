@@ -21,9 +21,9 @@ class Child
 	start: ->
 		try return @started
 		finally
-			# @started.then (=> log "Child::start() finished.", @started), (err) -> log "Child::start() failed:", err
+			fail = (msg) -> @started.reject msg
 			if ++@started.attempts > @opts.restart.maxAttempts
-				@started.reject "too many attempts"
+				fail "too many attempts"
 			else
 				clearTimeout @started.timeout
 				@started.timeout = setTimeout (=> @started.attempts = 0), @opts.restart.maxInterval
@@ -35,7 +35,7 @@ class Child
 						@log prefix + line
 				@process.stdout.on "data", on_data ""
 				@process.stderr.on "data", on_data "(stderr) "
-				unless @process.pid then @started.reject "no pid"
+				unless @process.pid then fail "no pid"
 				# IMPORTANT NOTE: does not resolve @started on it's own,
 				# a sub-class like Server or Worker is expected to @started.resolve()
 
@@ -48,14 +48,23 @@ class Child
 				@process.on 'exit', p.resolve
 				Process.kill @process.pid, signal
 
-	restart: (p) ->
-		try return p ?= $.Promise()
+	restart: ->
+		try return p = $.Promise()
 		finally unless @process? then @start().then p.resolve, p.reject
-		else Process.killTree(process, "SIGKILL").then (=>
-			@process = null
-			@started.reset()
-			@start p
-		), p.reject
+		else
+			restart = =>
+				log "Restarting child..."
+				@process = null
+				@started.reset()
+				@start().then p.resolve, p.reject
+			log "Killing existing process", @process.pid
+			Process.killTree(@process.pid, "SIGTERM").wait @opts.restart.gracePeriod, (err) ->
+				if err is "timeout"
+					log "Child failed to die within #{@opts.restart.gracePeriod}ms, escalating to SIGKILL"
+					Process.killTree(@process.pid, "SIGKILL")
+						.then restart, p.reject
+				else if err then p.reject err
+				else restart()
 
 	onExit: (exitCode) ->
 		return unless @process?
@@ -68,15 +77,9 @@ class Child
 
 	toString: -> "[(#{@process?.pid}):#{@port}]"
 	inspect:  -> "[(#{@process?.pid}):#{@port}]"
-
-	env: ->
-		ret = ""
-		for key,val of @opts.env when val?
-			ret += "#{key}=\"#{val}\" "
-		return ret
+	env: -> ("#{key}=\"#{val}\"" for key,val of @opts.env when val?).join " "
 
 	Child.defaults = (opts) -> # make sure each server block in the configuration has the minimum defaults
-
 		opts = $.extend Object.create(null), {
 			cd: "."
 			command: "node index.js"
@@ -129,7 +132,14 @@ class Worker extends Child
 			index
 		]
 		workers.push @
-		@log = $.logger "worker(#{@opts.cd})[#{@index}]"
+		@log = $.logger @toString()
+
+	toString: -> "(#{@opts.cd})[#{@index}]"
+	inspect: -> @toString()
+
+	start: ->
+		Child::start.apply @, p
+		@started.resolve()
 
 	Worker.defaults = Child.defaults
 
@@ -156,7 +166,7 @@ class Server extends Child
 			index
 		]
 		@port = opts.port + index
-		@log = $.logger "server(#{@opts.cd})[:#{@port}]"
+		@log = $.logger "(#{@opts.cd}):#{@port}"
 		(servers[opts.port] ?= []).push @
 
 	# wrap the default start function
