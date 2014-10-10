@@ -1,10 +1,13 @@
-$       = require 'bling'
-Express = require 'express'
-Http    = require 'http'
-Helpers = require './helpers'
-Opts    = require "./opts"
-log     = $.logger "[http]"
-app     = Express()
+$         = require 'bling'
+Express   = require 'express'
+BasicAuth = require "basic-auth"
+Http      = require 'http'
+Helpers   = require './helpers'
+Opts      = require "./opts"
+log       = $.logger "[http]"
+app       = Express()
+
+# default credentials
 http_username = Opts.username ? "demo"
 http_password = Opts.password ? "demo"
 
@@ -13,12 +16,21 @@ plain = (next) ->
 		res.contentType = "text/plain"
 		res.send = (status, content, enc = "utf8") ->
 			res.statusCode = status
-			res.end(content, enc)
-		res.pass = (content) -> res.send 200, content
+			try res.end(content, enc)
+			catch err
+				res.statusCode = 500
+				res.end(String(err), enc)
+		res.pass = (content) ->
+			res.send 200, switch $.type content
+				when "string","buffer"        then content
+				when "object","array","bling" then JSON.stringify content, null, "  "
+				else $.toRepr content
 		res.fail = (err) ->
-			if err?.stack then res.send 500, err.stack
-			else if $.is 'string', err then res.send 500, err
-			else res.send 500, JSON.stringify err
+			res.send 500, switch $.type err
+				when "error"                  then err.stack
+				when "string","buffer"        then err
+				when "object","array","bling" then JSON.stringify err
+				else $.toRepr content
 		return next req, res
 
 basicAuth = (user, pass, next) ->
@@ -29,7 +41,7 @@ basicAuth = (user, pass, next) ->
 				"WWW-Authenticate": 'Basic realm="shepherd"'
 			})
 			res.end()
-		return next req, res
+		else next req, res
 
 # allow other modules to inject routes by publishing them
 $.subscribe 'http-route', (method, path, handler) ->
