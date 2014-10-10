@@ -20,7 +20,7 @@ touch $LOG_FILE
 
 function shepherd_start {
 	log "Launching shepherd..."
-	$ROOT/bin/shepherd -v -o $LOG_FILE -f $JSON_FILE -d -p $PID_FILE
+	$ROOT/bin/shepherd -v -d -o $LOG_FILE -f $JSON_FILE -p $PID_FILE
 	sleep 4
 	return `cat $PID_FILE`
 }
