@@ -119,12 +119,12 @@ Process.tree = (proc) ->
 		), q.reject
 		p.then (-> q.resolve proc), q.reject
 
-Process.walk = (node, visit) ->
+Process.walk = (node, visit, depth=0) ->
 	try return p = $.Progress(1)
 	finally
-		try p.include visit node catch e then p.reject e
+		try p.include visit node, depth catch e then p.reject e
 		for child in node.children
-			p.include Process.walk child, visit
+			p.include Process.walk child, visit, depth + 1
 		p.finish(1)
 
 Process.killTree = (proc, signal) ->
@@ -137,7 +137,6 @@ Process.killTree = (proc, signal) ->
 		Process.tree(proc).then ((tree) ->
 			Process.walk tree, (node) ->
 				if node.pid
-					log("Death is visiting:", node.pid, "with signal", signal)
 					Process.kill node.pid, signal
 			p.resolve()
 		), p.reject
@@ -146,11 +145,11 @@ Process.summarize = (proc) ->
 	proc.rss = proc.cpu = 0
 	try return p = $.Promise()
 	finally Process.tree(proc).then (tree) ->
-		Process.walk tree, (node) ->
+		Process.walk tree, (node, depth) ->
 			proc.rss += node.rss # sum values upwards
 			proc.cpu += node.cpu
-			node.rss = proc.rss # and push the result down
-			node.cpu = proc.cpu
+			# node.rss = proc.rss # and push the result down
+			# node.cpu = proc.cpu
 		p.resolve tree
 
 Process.printTree = (proc, indent, spacer) ->
