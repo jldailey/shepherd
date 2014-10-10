@@ -1,6 +1,6 @@
-[$, Os, Fs, Handlebars, Shell, Process, { Server, Worker }, Http, Opts ] =
+[$, Os, Fs, Handlebars, Shell, Process, { Server, Worker }, Http, Opts, Helpers ] =
 	[ 'bling', 'os', 'fs', 'handlebars', 'shelljs',
-		'./process', './child', './http', './opts'
+		'./process', './child', './http', './opts', './helpers'
 	].map require
 log = $.logger "[herd-#{$.random.string 4}]"
 verbose = -> if Opts.verbose then log.apply null, arguments
@@ -20,10 +20,12 @@ module.exports = class Herd
 				@children.push new Server opts, index
 		for opts in @opts.workers
 			for index in [0...opts.count] by 1
+				log "Creating worker:", opts, index
 				@children.push new Worker opts, index
 
 		Http.get "/", (req, res) ->
-			Helpers.readJson "../package.json", (err, data) ->
+			packageFile = __dirname + "/../package.json"
+			Helpers.readJson(packageFile).wait (err, data) ->
 				if err then res.fail err
 				else res.pass { name: data.name, version: data.version }
 		Http.get "/tree", (req, res) ->
@@ -41,7 +43,7 @@ module.exports = class Herd
 			if checkConflict @opts.servers
 				p.reject "port range conflict in servers"
 			else
-				writeConfig(@).then (=> # write the nginx configuration
+				writeConfig(@).then (=> # write the dynamic configuration
 					@restart().then p.resolve, p.reject
 				), p.reject
 		), p.reject
@@ -52,8 +54,17 @@ module.exports = class Herd
 		finally
 			for child in @children when child.process
 				log "Stopping child:", child.process.pid
-				p.include Process.killTree { pid: child.process.pid }, signal
-			p.finish(1).then (-> log "Fully stopped."), (err) -> log "Failed to stop:", err
+				p.include child.stop(signal)
+			timeout = setTimeout (->
+				log "Failed to stop children within timeout."
+				process.exit 1
+			), 30000
+			p.on 'progress', (cur, max) ->
+				log "Progress: #{cur}/#{max}"
+			p.finish(1).then (->
+				log "Fully stopped."
+				clearTimeout timeout
+			), (err) -> log "Failed to stop:", err
 
 	restart: (from = 0, done = $.Promise()) -> # perform a careful rolling restart
 		if from is 0 then verbose "Rolling restart starting..."
@@ -92,11 +103,14 @@ module.exports = class Herd
 			else Http.listen(port).then p.resolve, p.reject
 
 	checkConflict = (servers) ->
-		ranges = [server.port, server.port + server.count - 1] for server in servers
+		ranges = ([server.port, server.port + server.count - 1] for server in servers)
 		for a in ranges
 			for b in ranges
-				if a[0] <= b[0] <= a[1] or a[0] <= b[1] <= a[1]
-					return true
+				switch true
+					when a is b then continue
+					when a[0] <= b[0] <= a[1] or a[0] <= b[1] <= a[1]
+						verbose "Conflict in port ranges:", a, b
+						return true
 		false
 
 	connectSignals = (self) ->
@@ -115,7 +129,7 @@ module.exports = class Herd
 			self.restart()
 
 		process.on "exit", (code) ->
-			console.log "process.on exit,", code
+			console.log "shepherd.on exit,", code
 
 	connectRabbit = (self) ->
 		r = self.opts.rabbitmq

@@ -6,6 +6,7 @@ Helpers = require './helpers'
 Http    = require './http'
 Handlebars = require "handlebars"
 log = $.logger "[child]"
+verbose = -> if Opts.verbose then log.apply null, arguments
 
 class Child
 	constructor: (opts, index) ->
@@ -21,7 +22,7 @@ class Child
 	start: ->
 		try return @started
 		finally
-			fail = (msg) -> @started.reject msg
+			fail = (msg) => @started.reject msg
 			if ++@started.attempts > @opts.restart.maxAttempts
 				fail "too many attempts"
 			else
@@ -29,7 +30,7 @@ class Child
 				@started.timeout = setTimeout (=> @started.attempts = 0), @opts.restart.maxInterval
 				log "shell >" , cmd = "env #{@env()} bash -c 'cd #{@opts.cd} && #{@opts.command}'"
 				@process = Shell.exec cmd, { silent: true, async: true }, $.identity
-				@process.on "exit", (code) => @onExit code
+				@process.on "exit", (err, signal) => @onExit err, signal
 				on_data = (prefix = "") => (data) =>
 					for line in String(data).split /\n/ when line.length
 						@log prefix + line
@@ -42,11 +43,9 @@ class Child
 	stop: (signal) ->
 		@started.attempts = Infinity
 		try return p = $.Promise()
-		finally
-			unless @process? then p.reject 'no process'
-			else
-				@process.on 'exit', p.resolve
-				Process.kill @process.pid, signal
+		finally if @process
+			Process.killTree(@process.pid, signal).then p.resolve, p.reject
+		else p.resolve()
 
 	restart: ->
 		try return p = $.Promise()
@@ -66,17 +65,20 @@ class Child
 				else if err then p.reject err
 				else restart()
 
-	onExit: (exitCode) ->
-		return unless @process?
-		@log "Child PID: #{@process.pid} exited:", exitCode
+	onExit: (code, signal) ->
+		@log "Child PID: #{@process.pid} exited:", code, signal
+
 		# Record the death of the child
 		@process = null
-		# if it died with a restartable exit code, attempt to restart it
-		if exitCode isnt 0
-			@start()
 
-	toString: -> "[(#{@process?.pid}):#{@port}]"
-	inspect:  -> "[(#{@process?.pid}):#{@port}]"
+		exitSignal = if $.is('number', code) then code - 128
+		else Process.getSignalNumber(signal)
+
+		# if it died with a restartable exit code, attempt to restart it
+		if exitSignal isnt 9 then @restart()
+
+	toString: -> "child[#{@index}]"
+	inspect:  -> "child[#{@index}]"
 	env: -> ("#{key}=\"#{val}\"" for key,val of @opts.env when val?).join " "
 
 	Child.defaults = (opts) -> # make sure each server block in the configuration has the minimum defaults
@@ -117,8 +119,8 @@ class Child
 
 class Worker extends Child
 	Http.get "/workers", (req, res) ->
-		return "[" +
-			("[#{worker.process?.pid ? "DEAD"}, :#{worker.port}]" for worker in workers).join ",\n"
+		res.pass "[" +
+			("[#{worker.process?.pid ? "DEAD"}, #{worker.port}]" for worker in workers).join ",\n"
 		+ "]"
 	Http.get "/workers/restart", (req, res) ->
 		for worker in workers
@@ -128,17 +130,17 @@ class Worker extends Child
 
 	constructor: (opts, index) ->
 		Child.apply @, [
-			opts = Worker.defaults opts,
+			opts = Worker.defaults(opts),
 			index
 		]
 		workers.push @
 		@log = $.logger @toString()
 
-	toString: -> "(#{@opts.cd})[#{@index}]"
-	inspect: -> @toString()
+	toString: -> "worker[#{@index}]"
+	inspect:  -> "worker[#{@index}]"
 
 	start: ->
-		Child::start.apply @, p
+		Child::start.apply @
 		@started.resolve()
 
 	Worker.defaults = Child.defaults
@@ -146,11 +148,9 @@ class Worker extends Child
 class Server extends Child
 	Http.get "/servers", (req, res) ->
 		ret = "["
-		for port,servers of servers
-			for server in servers
-				ret += "[#{server.process?.pid ? "DEAD"}, :#{server.port}],\n"
-		ret += "]"
-		res.pass ret
+		for port,v of servers
+			ret += ("[#{s.process?.pid ? "DEAD"}, #{s.port}]" for s in v).join ",\n"
+		res.pass ret + "]"
 	Http.get "/servers/restart", (req, res) ->
 		for port,v of servers
 			for server in v
@@ -162,15 +162,18 @@ class Server extends Child
 
 	constructor: (opts, index) ->
 		Child.apply @, [
-			opts = Server.defaults opts,
+			opts = Server.defaults(opts),
 			index
 		]
 		@port = opts.port + index
 		@log = $.logger "(#{@opts.cd}):#{@port}"
 		(servers[opts.port] ?= []).push @
 
+	toString: -> "server[:#{@index}]"
+	inspect:  -> "server[:#{@index}]"
+
 	# wrap the default start function
-	start: () ->
+	start: ->
 		try return @started
 		finally
 			_start = Child::start
@@ -182,16 +185,14 @@ class Server extends Child
 						@start()
 				else # port is available, so really start
 					_start.apply(@)
-					log "Waiting for port", @port, "to be owned by", @process.pid
-					Helpers.portIsOwned(@process.pid, @port, @opts.restart.timeout)
-						.then @started.resolve, @started.reject
-
-	stop: ->
-		Child::stop.apply(@)
-		try return p = $.Promise()
-		finally if @process
-			Process.killTree(@process.pid, "SIGTERM").then p.resolve, p.reject
-		else p.resolve()
+					log "started", @started.toString()
+					if not @started.rejected
+						verbose "Waiting for port", @port, "to be owned by", @process.pid
+						Helpers.portIsOwned(@process.pid, @port, @opts.restart.timeout)
+							.then (=>
+								verbose "Port #{@port} is successfully owned."
+								@started.resolve()
+							), @started.reject
 
 	env: ->
 		ret = Child::env.apply @
