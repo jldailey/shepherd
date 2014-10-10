@@ -1,3 +1,4 @@
+#!/bin/bash
 
 ROOT=`dirname $0`/..
 TEST_NAME=`basename $0 | sed s/\.sh//`
@@ -44,9 +45,15 @@ function kill_owner {
 	fi
 }
 
+function get_owners {
+	local port=$1
+	echo `lsof -Pni :${port} | grep :${port} | awk '{print $2}'`
+}
+
 function check_output {
 	local port=$1
-	local expected="{\"PORT\": $port, \"TOKEN\": \"123456\"}"
+	local owner=$(get_owners $port)
+	local expected="{\"PORT\": $port, \"PID\": \"" + get_owners $port + "\"}"
 	local output=`curl -s http://localhost:$port/`
 	if [ "$output" != "$expected" ]; then
 		echo "Unexpected output: '" $output "' expected: '" $expected "'"
@@ -56,3 +63,10 @@ function check_output {
 		echo "PASS"
 	fi
 }
+
+if [ "$0" == "./common.sh" ]; then
+	port=$1
+	echo Testing common.sh...
+	owner=$(get_owners $port)
+	echo $owner
+fi

@@ -18,10 +18,7 @@ $.delay(500, function() { // add an artificial startup delay
 			res.end(text || "")
 			console.log(req.method + " " + req.url + " " + res.statusCode)
 		}
-		Fs.readFile("token", function(err, data) {
-			if( err != null ) fail(err)
-			else finish('{"PORT": ' + process.env.PORT + ', "TOKEN": "' + String(data).replace(/(?:\n|\r)/g,'') + '"}')
-		})
+		finish('{"PORT": ' + process.env.PORT + ', "PID": "' + process.pid + '"}')
 	}).listen(process.env.PORT);
 	console.log("Listening on port", process.env.PORT)
 })
