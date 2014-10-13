@@ -1,10 +1,11 @@
 $       = require 'bling'
 Os      = require "os"
 Shell   = require 'shelljs'
+Handlebars = require "handlebars"
 Process = require './process'
 Helpers = require './helpers'
 Http    = require './http'
-Handlebars = require "handlebars"
+Opts    = require './opts'
 log = $.logger "[child]"
 verbose = -> if Opts.verbose then log.apply null, arguments
 
