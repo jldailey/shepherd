@@ -22,6 +22,7 @@
     "rabbit.js": "0.4.1",
     "handlebars": "2.0.0",
     "daemon": "1.1.0",
+    "hjson": "latest",
     "basic-auth": "latest"
   },
   "devDependencies": {
