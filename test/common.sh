@@ -53,7 +53,7 @@ function get_owners {
 function check_output {
 	local port=$1
 	local owner=$(get_owners $port)
-	local expected="{\"PORT\": $port, \"PID\": \"" + get_owners $port + "\"}"
+	local expected="{\"PORT\": $port, \"PID\": \"$owner\"}"
 	local output=`curl -s http://localhost:$port/`
 	if [ "$output" != "$expected" ]; then
 		echo "Unexpected output: '" $output "' expected: '" $expected "'"
