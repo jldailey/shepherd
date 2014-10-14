@@ -28,11 +28,12 @@ function shepherd_start {
 
 function shepherd_stop {
 	log "Stopping shepherd..."
-	PID=`cat $PID_FILE`
-	kill -2 $PID || log "Failed to kill shepherd pid:" $PID
-	rm -f $PID_FILE $JSON_FILE
+	curl -u demo:demo http://localhost:9001/stop
+	# PID=`cat $PID_FILE`
+	# kill -2 $PID || log "Failed to kill shepherd pid:" $PID
+	# rm -f $PID_FILE $JSON_FILE
 	if $VERBOSE; then
-		kill %1
+		kill %1 # kill the tail -f log_file job
 	fi
 }
 
