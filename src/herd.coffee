@@ -15,12 +15,14 @@ module.exports = class Herd
 		@opts = Herd.defaults(opts)
 		@shepherdId = [Os.hostname(), @opts.admin.port].join(":")
 		@children = []
+		connectSignals @ # register our process signal handlers
 		for opts in @opts.servers
 			for index in [0...opts.count] by 1
+				verbose "Creating server:", opts, index
 				@children.push new Server opts, index
 		for opts in @opts.workers
 			for index in [0...opts.count] by 1
-				log "Creating worker:", opts, index
+				verbose "Creating worker:", opts, index
 				@children.push new Worker opts, index
 
 		Http.get "/", (req, res) ->
@@ -32,18 +34,24 @@ module.exports = class Herd
 			Process.findOne({ pid: process.pid }).then (proc) ->
 				Process.summarize(proc).then (tree) ->
 					res.pass Process.printTree(tree)
+		Http.get "/stop", (req, res) =>
+			@stop("SIGTERM").then (->
+				res.pass "Children stopped, closing server."
+				$.delay 100, process.exit
+			), res.fail
 
 		connectRabbit  @ # connect to rabbitmq
-		connectSignals @ # register our process signal handlers
 
 	start: (p = $.Promise()) ->
 		try return p
 		finally listen(@).then (=> # start the admin server
 			log "Admin server listening on port:", @opts.admin.port
 			if checkConflict @opts.servers
+				verbose "Port range conflict in servers"
 				p.reject "port range conflict in servers"
 			else
 				writeConfig(@).then (=> # write the dynamic configuration
+					verbose "Nginx configuration written."
 					@restart().then p.resolve, p.reject
 				), p.reject
 		), p.reject
@@ -53,8 +61,10 @@ module.exports = class Herd
 		try return p = $.Progress 1
 		finally
 			for child in @children when child.process
-				log "Stopping child:", child.process.pid
-				p.include child.stop(signal)
+				try p.include child.stop(signal)
+				catch err
+					log "Error stopping child:", err.stack ? err
+					p.reject err
 			timeout = setTimeout (->
 				log "Failed to stop children within timeout."
 				process.exit 1
@@ -87,11 +97,24 @@ module.exports = class Herd
 		finally if nginx.config
 			if not nginx.enabled then p.resolve()
 			else
+				fail = (msg, err) -> p.reject(msg + (err.stack ? err))
 				verbose "Writing nginx configuration to file:", nginx.config
 				Fs.writeFile nginx.config, buildNginxConfig(self), (err) ->
-					if err then log "Failed to write nginx configuration file:", err
+					if err then fail "Failed to write nginx configuration file:", err
 					else Process.exec(nginx.reload).wait (err) ->
-						if err then log "Failed to reload nginx:", err
+						if err then fail "Failed to reload nginx:", err
+						else p.resolve()
+
+	buildNginxConfig = (self) ->
+		s = ""
+		pools = Object.create null
+		for child in self.children
+			if 'poolName' of child.opts and 'port' of child
+				(pools[child.opts.poolName] or= []).push child
+		for upstream, servers of pools
+			s += self.opts.nginx.template({ upstream, servers })
+		verbose "nginx configuration:\n", s
+		s
 
 	listen = (self, p = $.Promise()) ->
 		port = self.opts.admin.port
@@ -117,11 +140,13 @@ module.exports = class Herd
 		clean_exit = -> log "Exiting clean..."; process.exit 0
 		dirty_exit = (err) -> console.error(err); process.exit 1
 
+		###
 		# on SIGINT or SIGTERM, kill everything and die
 		for sig in ["SIGINT", "SIGTERM"] then do (sig) ->
 			process.on sig, ->
 				log "Got signal:", sig
 				self.stop("SIGKILL").then clean_exit, dirty_exit
+		###
 
 		# on SIGHUP, just reload all child procs
 		process.on "SIGHUP", ->
@@ -129,7 +154,7 @@ module.exports = class Herd
 			self.restart()
 
 		process.on "exit", (code) ->
-			console.log "shepherd.on exit,", code
+			log "shepherd.on 'exit',", code
 
 	connectRabbit = (self) ->
 		r = self.opts.rabbitmq
@@ -169,18 +194,15 @@ module.exports = class Herd
 						status: { servers, workers }
 					}
 
-	buildNginxConfig = (self) ->
-		pools = Object.create null
-		try return s = ""
-		finally
-			for server in self.servers
-				(pools[server.opts.poolName] or= []).push server
-			for upstream of pools
-				s += "upstream #{upstream} {\n"
-				for server in pools[upstream]
-					s += "\tserver 127.0.0.1:#{server.port};\n"
-				s += "}\n"
-			log("nginx configuration:\n", s)
+	nginxTemplate = Handlebars.compile """
+		upstream {{upstream}} {
+			{{#each servers}}
+			server 127.0.0.1:{{this.port}} weight=1;
+			{{/each}}
+			keepalive 32;
+		}
+	"""
+
 
 	collectStatus = (pids) -> Process.find { pid }
 
@@ -215,7 +237,27 @@ Herd.defaults = (opts) ->
 			reload: "echo I don't know how to reload nginx on platform: " + Os.platform()
 		), opts.nginx
 
-	opts.admin = $.extend Object.create(null), { # the http server listens for REST calls and web hooks
+	opts.nginx.template or= """
+		upstream {{upstream}} {
+			{{pre}}
+			{{#each servers}}
+			server 127.0.0.1:{{this.port}} weight=1;
+			{{/each}}
+			{{post}}
+			keepalive 32;
+		}
+	"""
+	opts.nginx.template = Handlebars.compile opts.nginx.template
+	opts.nginx.template.inspect = (level) ->
+		return '"' + opts.nginx.template({
+			upstream: "{{upstream}}",
+			pre: "{{#each servers}}"
+			servers: [ { port: "{{this.port}}" } ]
+			post: "{{/each}}"
+		}) + '"'
+
+	# the http server listens for REST calls and web hooks
+	opts.admin = $.extend Object.create(null), {
 		enabled: true
 		port: 9000
 	}, opts.admin

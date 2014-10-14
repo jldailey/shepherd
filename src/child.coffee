@@ -7,7 +7,9 @@ Helpers = require './helpers'
 Http    = require './http'
 Opts    = require './opts'
 log = $.logger "[child]"
-verbose = -> if Opts.verbose then log.apply null, arguments
+verbose = ->
+	try if Opts.verbose then log.apply null, arguments
+	catch err then log "verbose error:", err.stack ? err
 
 class Child
 	constructor: (opts, index) ->
@@ -18,7 +20,7 @@ class Child
 			started: $.extend $.Promise(),
 				attempts: 0
 				timeout: null
-			log: $.logger @toString()
+		@log = $.logger @toString()
 
 	start: ->
 		try return @started
@@ -42,45 +44,65 @@ class Child
 				# a sub-class like Server or Worker is expected to @started.resolve()
 
 	stop: (signal) ->
-		@started.attempts = Infinity
 		try return p = $.Promise()
-		finally if @process
-			Process.killTree(@process.pid, signal).then p.resolve, p.reject
-		else p.resolve()
+		finally
+			@started.attempts = Infinity
+			if @process
+				try Process.killTree(@process.pid, signal).then p.resolve, p.reject
+				catch err
+					log "Error calling killTree:", err.stack ? err
+			else p.resolve()
 
 	restart: ->
 		try return p = $.Promise()
-		finally unless @process? then @start().then p.resolve, p.reject
+		finally unless @process?
+			log "Starting fresh child (no existing process)"
+			@start().then p.resolve, p.reject
 		else
 			restart = =>
-				log "Restarting child..."
-				@process = null
-				@started.reset()
-				@start().then p.resolve, p.reject
+				try
+					log "Restarting child..."
+					@process = null
+					@started.reset()
+					@started.attempts = 0
+					@start().then p.resolve, p.reject
+				catch err
+					log "restart error:", err.stack ? err
 			log "Killing existing process", @process.pid
 			Process.killTree(@process.pid, "SIGTERM").wait @opts.restart.gracePeriod, (err) ->
-				if err is "timeout"
-					log "Child failed to die within #{@opts.restart.gracePeriod}ms, escalating to SIGKILL"
-					Process.killTree(@process.pid, "SIGKILL")
-						.then restart, p.reject
-				else if err then p.reject err
-				else restart()
+				try
+					if err is "timeout"
+						log "Child failed to die within #{@opts.restart.gracePeriod}ms, using SIGKILL"
+						Process.killTree(@process.pid, "SIGKILL")
+							.then restart, p.reject
+					else if err then p.reject err
+					else restart()
+				catch err
+					log "restart error during kill tree:", err.stack ? err
 
 	onExit: (code, signal) ->
-		@log "Child PID: #{@process.pid} exited:", code, signal
+		try
+			@log "Child PID: #{@process.pid} exited:", code, signal
+			# Record the death of the child
+			@process = null
+			exitSignal = if $.is('number', code) then code - 128
+			else Process.getSignalNumber(signal)
+			# if it died with a restartable exit code, attempt to restart it
+			if exitSignal not in [9, 15]
+				@log "Child restarting (exit signal: #{exitSignal})"
+				@restart()
+		catch err
+			log "child.onExit error:", err.stack ? err
 
-		# Record the death of the child
-		@process = null
-
-		exitSignal = if $.is('number', code) then code - 128
-		else Process.getSignalNumber(signal)
-
-		# if it died with a restartable exit code, attempt to restart it
-		if exitSignal isnt 9 then @restart()
-
-	toString: -> "child[#{@index}]"
-	inspect:  -> "child[#{@index}]"
-	env: -> ("#{key}=\"#{val}\"" for key,val of @opts.env when val?).join " "
+	toString: ->
+		try return "child[#{@index}]"
+		catch err then log "toString error:", err.stack ? err
+	inspect: ->
+		try return "child[#{@index}]"
+		catch err then log "inspect error:", err.stack ? err
+	env: ->
+		try return ("#{key}=\"#{val}\"" for key,val of @opts.env when val?).join " "
+		catch err then log "env error:", err.stack ? err
 
 	Child.defaults = (opts) -> # make sure each server block in the configuration has the minimum defaults
 		opts = $.extend Object.create(null), {
@@ -141,7 +163,7 @@ class Worker extends Child
 	inspect:  -> "worker[#{@index}]"
 
 	start: ->
-		Child::start.apply @
+		super()
 		@started.resolve()
 
 	Worker.defaults = Child.defaults
@@ -177,7 +199,6 @@ class Server extends Child
 	start: ->
 		try return @started
 		finally
-			_start = Child::start
 			# find any process that is listening on our port
 			Process.clearCache().findOne({ ports: @port }).then (owner) =>
 				if owner? # if the port is being listened on
@@ -185,9 +206,10 @@ class Server extends Child
 					Process.killTree(owner, "SIGKILL").then =>
 						@start()
 				else # port is available, so really start
-					_start.apply(@)
+					super() # do the base Child start
 					log "started", @started.toString()
-					if not @started.rejected
+					unless @process then @started.reject("no process")
+					else
 						verbose "Waiting for port", @port, "to be owned by", @process.pid
 						Helpers.portIsOwned(@process.pid, @port, @opts.restart.timeout)
 							.then (=>

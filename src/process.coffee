@@ -8,13 +8,19 @@ log = $.logger "[Process]"
 Process.exec = (cmd, verbose) ->
 	try return p = $.Promise()
 	finally
-		if verbose then log "shell >", cmd
-		ret = { output: "" }
-		child = Shell.exec cmd, { silent: true, async: true }, (exitCode) ->
-			if exitCode isnt 0 then p.reject ret.output
-			else p.resolve ret.output
-		child.stdout.on "data", append_output = (data) -> ret.output += String data
-		child.stderr.on "data", append_output
+		try
+			if verbose then log "shell >", cmd
+			ret = { output: "" }
+			child = Shell.exec cmd, { silent: true, async: true }, (exitCode) ->
+				try
+					if exitCode isnt 0 then p.reject ret.output
+					else p.resolve ret.output
+				catch err
+					log "exec: error handling process exit:", err.stack ? err
+			child.stdout.on "data", append_output = (data) -> ret.output += String data
+			child.stderr.on "data", append_output
+		catch err
+			log "exec: error in running process:", err.stack ? err
 
 # for caching the output of 'ps' commands
 # mostly to save time in commands like Process.tree
@@ -23,72 +29,88 @@ psCache = new $.Cache(2, 100)
 
 ps_cmd = "ps -eo uid,pid,ppid,pcpu,rss,command"
 ps_parse = (output) ->
-	output = output.split('\n').map((line) -> # split into lines
-		line.split(/[ ]+/).slice(1) # split each line on whitespace
-	).slice(0,-1)
-	 # .slice(0,-1) # discard the last line?
-	# turn the 2D array of proc data into a list of process objects
-	keys = output[0].map $.slugize # parse the first line for the field names
-	return output.slice(1).map (row) -> # for each row
-		try return ret = Object.create(null) # return an object
-		finally for key,i in keys # attach an output value to each key for this row
-			if i is keys.length - 1
-				ret[key] = row.slice(i).join(' ') # the last value (the command) is all concatenated together
-			else
-				val = row[i]
-				try # gently attempt to make numbers out of number-like strings
-					val = parseInt(val, 10)
-					unless isFinite(val) # revert the value on a soft parsing (NaN, Infinity, etc)
-						val = row[i]
-				catch e
+	try
+		output = output.split('\n').map((line) -> # split into lines
+			line.split(/[ ]+/).slice(1) # split each line on whitespace
+		).slice(0,-1) # discard the last line?
+		# turn the 2D array of proc data into a list of process objects
+		keys = output[0].map $.slugize # parse the first line for the field names
+		return output.slice(1).map (row) -> # for each row
+			try return ret = Object.create(null) # return an object
+			finally for key,i in keys # attach an output value to each key for this row
+				if i is keys.length - 1 # the last value (the command) is all concatenated together
+					ret[key] = row.slice(i).join(' ')
+				else
 					val = row[i]
-				finally
-					ret[key] = val
-			unless ret[key]?
-				console.log key, i, row[i], ret[key]
+					try # gently attempt to make numbers out of number-like strings
+						val = parseInt(val, 10)
+						unless isFinite(val) # revert the value on a soft parsing (NaN, Infinity, etc)
+							val = row[i]
+					catch e
+						val = row[i]
+					finally
+						ret[key] = val
+				unless ret[key]?
+					log "ps_parse failed to parse line:", key, i, row[i], ret[key]
+	catch err
+		log "ps_parse error:", err.stack ? err
 
+# given the output of ps_parse, use "lsof" to attach listening ports
 lsof_cmd = "lsof -Pni | grep LISTEN"
-attach_ports = (procs) -> # given the output of ps_parse, use "lsof" to attach listening ports
+attach_ports = (procs) ->
 	try return attached = $.Promise()
 	finally
-		index = Object.create null
-		for proc in procs
-			index[proc.pid] = proc
-			proc.ports = []
-		Process.exec(lsof_cmd).then (output) ->
-			for line in output.split /\n/g
-				line = line.split(/\s+/g)
-				continue if line.length < 8
-				pid = parseInt line[1], 10
-				port = parseInt line[8].split(/:/)[1], 10
+		try
+			index = Object.create null
+			for proc in procs
+				index[proc.pid] = proc
+				proc.ports = []
+			Process.exec(lsof_cmd).then (output) ->
 				try
-					index[pid].ports.push port
+					for line in output.split /\n/g
+						line = line.split(/\s+/g)
+						continue if line.length < 8
+						pid = parseInt line[1], 10
+						port = parseInt line[8].split(/:/)[1], 10
+						try
+							index[pid].ports.push port
+						catch err
+							log err, pid, index[pid]
+					attached.resolve(procs)
 				catch err
-					log err, pid, index[pid]
-			attached.resolve(procs)
+					log "attach_ports error while parsing output:", err.stack ? err
+		catch err
+			log "attach_ports error:", err.stack ? err
 
 Process.clearCache = -> psCache.del ps_cmd; Process
 
 Process.find = (query) ->
 	try return p = $.Promise()
 	finally
-		query = switch $.type query
-			when "string" then { cmd: new RegExp query }
-			when "number" then { pid: query }
-			else query
+		try
+			query = switch $.type query
+				when "string" then { cmd: new RegExp query }
+				when "number" then { pid: query }
+				else query
 
-		if psCache.has ps_cmd
-			p.resolve psCache.get(ps_cmd).filter (item) -> $.matches query, item
-		else Process.exec(ps_cmd).then ((output) ->
-			attach_ports(ps_parse(output)).then ((procs) ->
-				p.resolve psCache.set(ps_cmd, procs).filter (item) -> $.matches query, item
+			if psCache.has ps_cmd
+				p.resolve psCache.get(ps_cmd).filter (item) -> $.matches query, item
+			else Process.exec(ps_cmd).then ((output) ->
+				attach_ports(ps_parse(output)).then ((procs) ->
+					try
+						p.resolve psCache.set(ps_cmd, procs).filter (item) -> $.matches query, item
+					catch err
+						log "find error in results:", err.stack ? err
+				), p.reject
 			), p.reject
-		), p.reject
+		catch err
+			log "find error:", err.stack ? err
 
 Process.findOne = (query) ->
 	try return p = $.Promise()
 	finally Process.find(query).then ((out) ->
-		p.resolve out[0]
+		try p.resolve out[0]
+		catch err then log "findOne error:", err.stack ? err
 	), p.reject
 
 Process.signals = signals = {
@@ -105,24 +127,32 @@ Process.signals = signals = {
 Process.getSignalNumber = (signal) ->
 	signals[signal] ? (if $.is 'number', signal then signal else 15)
 
-Process.kill = (pid, signal) -> Process.exec "kill -#{Process.getSignalNumber signal} #{pid}", true
+Process.kill = (pid, signal) ->
+	try Process.exec "kill -#{Process.getSignalNumber signal} #{pid}"
+	catch err then log "kill error:", err.stack ? err
 
 Process.tree = (proc) ->
 	try return q = $.Promise()
 	finally
 		p = $.Progress 1
 		if proc then Process.find({ ppid: proc.pid }).then ((children) ->
-			proc.children = children
-			for child in children
-				p.include Process.tree child
-			p.resolve(1, proc)
+			try
+				proc.children = children
+				for child in children
+					p.include Process.tree child
+				p.resolve(1, proc)
+			catch err
+				log "tree error:", err.stack ? err
 		), q.reject
 		p.then (-> q.resolve proc), q.reject
 
 Process.walk = (node, visit, depth=0) ->
 	try return p = $.Progress(1)
 	finally
-		try p.include visit node, depth catch e then p.reject e
+		try p.include visit node, depth
+		catch err
+			log "walk error (in visit):", err.stack ? err
+			p.reject err
 		for child in node.children
 			p.include Process.walk child, visit, depth + 1
 		p.finish(1)
@@ -130,39 +160,46 @@ Process.walk = (node, visit, depth=0) ->
 Process.killTree = (proc, signal) ->
 	try return p = $.Promise()
 	finally
-		signal = Process.getSignalNumber(signal)
-		proc = switch $.type(proc)
-			when 'string','number' then { pid: proc }
-			else proc
-		Process.tree(proc).then ((tree) ->
-			Process.walk tree, (node) ->
-				if node.pid
-					Process.kill node.pid, signal
-			p.resolve()
-		), p.reject
+		try
+			signal = Process.getSignalNumber(signal)
+			proc = switch $.type proc
+				when 'string','number' then { pid: proc }
+				else proc
+			Process.tree(proc).then ((tree) ->
+				try
+					Process.walk tree, (node) ->
+						if node.pid then Process.kill node.pid, signal
+						else log "killTree invalid node:", node
+					p.resolve()
+				catch err
+					log "killTree error while walking:", err.stack ? err
+			), p.reject
+		catch err
+			log "killTree error:", err.stack ? err
 
-Process.summarize = (proc) ->
+Process.summarize = (proc) -> # currently kind of worthless, needs to use depth
 	proc.rss = proc.cpu = 0
 	try return p = $.Promise()
 	finally Process.tree(proc).then (tree) ->
 		Process.walk tree, (node, depth) ->
 			proc.rss += node.rss # sum values upwards
 			proc.cpu += node.cpu
-			# node.rss = proc.rss # and push the result down
-			# node.cpu = proc.cpu
 		p.resolve tree
 
 Process.printTree = (proc, indent, spacer) ->
-	spacer or= "\\_"
-	indent or= "* "
-	ret = indent + proc.pid + " " + proc.command
-	if proc.ports?.length then ret += " [:" + proc.ports.join(", :") + "]"
-	ret += " {mem: #{$.commaize proc.rss}kb cpu: #{proc.cpu}%}\n"
-	indent = spacer + indent
-	for child in proc.children
-		ret += Process.printTree child, indent, "   "
-	indent.replace /^   /,''
-	return ret
+	try
+		spacer or= "\\_"
+		indent or= "* "
+		ret = indent + proc.pid + " " + proc.command
+		if proc.ports?.length then ret += " [:" + proc.ports.join(", :") + "]"
+		ret += " {mem: #{$.commaize proc.rss}kb cpu: #{proc.cpu}%}\n"
+		indent = spacer + indent
+		for child in proc.children
+			ret += Process.printTree child, indent, "   "
+		indent.replace /^   /,''
+		return ret
+	catch err
+		log "printTree error:", err.stack ? err
 
 if require.main is module
 	port = parseInt(process.argv[2], 10) || 8000

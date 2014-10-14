@@ -57,6 +57,13 @@ $.extend module.exports, {
 		finally
 			try server.listen port, (err) -> if err then p.reject err else p.resolve port
 			catch _err then p.reject _err
+	close: ->
+		try return p = $.Promise()
+		finally
+			try server.close (err) ->
+				if err then p.reject err
+				else p.resolve()
+			catch _err then p.reject _err
 }
 
 for method in ["get", "put", "post", "delete"] then do (method) ->

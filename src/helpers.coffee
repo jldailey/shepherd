@@ -2,6 +2,7 @@ $       = require 'bling'
 Fs      = require 'fs'
 Os      = require 'os'
 Shell   = require 'shelljs'
+HJson   = require 'hjson'
 Process = require './process'
 Helpers = module.exports
 log     = $.logger "[helper]"
@@ -16,15 +17,14 @@ Helpers.readJson = (file, p) ->
 	# Read the file
 	Fs.readFile file, (err, data) ->
 		if err then return p.reject err
-		try p.resolve JSON.parse String data
+		try p.resolve HJson.parse String data
 		catch _err then p.reject _err
 		null
 	return p
 
 Helpers.delay = (ms) ->
 	p = $.Promise()
-	$.delay ms, ->
-		p.resolve()
+	$.delay ms, p.resolve
 	p
 
 # wait until a certain pid (or it's child) is listening on a port
