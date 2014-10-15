@@ -21,6 +21,9 @@ class Child
 				attempts: 0
 				timeout: null
 		@log = $.logger @toString()
+		@log.verbose = =>
+			try if Opts.verbose then @log.apply null, arguments
+			catch err then @log "verbose error:", err.stack ? err
 
 	start: ->
 		try return @started
@@ -47,6 +50,7 @@ class Child
 		try return p = $.Promise()
 		finally
 			@started.attempts = Infinity
+			@expectedExit = true
 			if @process
 				try Process.killTree(@process.pid, signal).then p.resolve, p.reject
 				catch err
@@ -65,6 +69,7 @@ class Child
 					@process = null
 					@started.reset()
 					@started.attempts = 0
+					@expectedExit = false
 					@start().then p.resolve, p.reject
 				catch err
 					log "restart error:", err.stack ? err
@@ -82,29 +87,27 @@ class Child
 
 	onExit: (code, signal) ->
 		try
-			@log "Child PID: #{@process.pid} exited:", code, signal
+			pid = @process.pid
 			# Record the death of the child
 			@process = null
 			exitSignal = if $.is('number', code) then code - 128
 			else Process.getSignalNumber(signal)
+			@log "Child PID: #{pid} exited (exitSignal=#{exitSignal})"
 			# if it died with a restartable exit code, attempt to restart it
-			if exitSignal not in [9, 15]
-				@log "Child restarting (exit signal: #{exitSignal})"
-				@restart()
+			unless @expectedExit then @restart()
 		catch err
 			log "child.onExit error:", err.stack ? err
 
-	toString: ->
-		try return "child[#{@index}]"
+	toString: toString = ->
+		try return "#{@constructor.name}[#{@index}]"
 		catch err then log "toString error:", err.stack ? err
-	inspect: ->
-		try return "child[#{@index}]"
-		catch err then log "inspect error:", err.stack ? err
+	inspect:  toString
+
 	env: ->
 		try return ("#{key}=\"#{val}\"" for key,val of @opts.env when val?).join " "
 		catch err then log "env error:", err.stack ? err
 
-	Child.defaults = (opts) -> # make sure each server block in the configuration has the minimum defaults
+	Child.defaults = (opts) ->
 		opts = $.extend Object.create(null), {
 			cd: "."
 			command: "node index.js"
@@ -159,9 +162,6 @@ class Worker extends Child
 		workers.push @
 		@log = $.logger @toString()
 
-	toString: -> "worker[#{@index}]"
-	inspect:  -> "worker[#{@index}]"
-
 	start: ->
 		super()
 		@started.resolve()
@@ -175,9 +175,7 @@ class Server extends Child
 			ret += ("[#{s.process?.pid ? "DEAD"}, #{s.port}]" for s in v).join ",\n"
 		res.pass ret + "]"
 	Http.get "/servers/restart", (req, res) ->
-		for port,v of servers
-			for server in v
-				server.restart()
+		$.valuesOf(servers).flatten().select('restart').call()
 		res.redirect 302, "/servers?restarting"
 
 	# a map of base port to all Server instances based on that port
@@ -192,9 +190,6 @@ class Server extends Child
 		@log = $.logger "(#{@opts.cd}):#{@port}"
 		(servers[opts.port] ?= []).push @
 
-	toString: -> "server[:#{@index}]"
-	inspect:  -> "server[:#{@index}]"
-
 	# wrap the default start function
 	start: ->
 		try return @started
@@ -207,7 +202,6 @@ class Server extends Child
 						@start()
 				else # port is available, so really start
 					super() # do the base Child start
-					log "started", @started.toString()
 					unless @process then @started.reject("no process")
 					else
 						verbose "Waiting for port", @port, "to be owned by", @process.pid
@@ -217,10 +211,7 @@ class Server extends Child
 								@started.resolve()
 							), @started.reject
 
-	env: ->
-		ret = Child::env.apply @
-		ret += "#{@opts.portVariable}=\"#{@port}\""
-		ret
+	env: -> super() + "#{@opts.portVariable}=\"#{@port}\""
 	Server.defaults = (opts) ->
 		opts = $.extend {
 			port: 8001
