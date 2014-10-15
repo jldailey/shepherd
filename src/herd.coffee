@@ -3,11 +3,7 @@
 		'./process', './child', './http', './opts', './helpers'
 	].map require
 log = $.logger "[herd-#{$.random.string 4}]"
-verbose = -> if Opts.verbose then log.apply null, arguments
-
-die = ->
-	log.apply null, arguments
-	process.exit 1
+log.verbose = -> if Opts.verbose then log.apply null, arguments
 
 module.exports = class Herd
 
@@ -18,11 +14,11 @@ module.exports = class Herd
 		connectSignals @ # register our process signal handlers
 		for opts in @opts.servers
 			for index in [0...opts.count] by 1
-				verbose "Creating server:", opts, index
+				log.verbose "Creating server:", opts, index
 				@children.push new Server opts, index
 		for opts in @opts.workers
 			for index in [0...opts.count] by 1
-				verbose "Creating worker:", opts, index
+				log.verbose "Creating worker:", opts, index
 				@children.push new Worker opts, index
 
 		Http.get "/", (req, res) ->
@@ -46,38 +42,39 @@ module.exports = class Herd
 		try return p
 		finally listen(@).then (=> # start the admin server
 			log "Admin server listening on port:", @opts.admin.port
-			if checkConflict @opts.servers
-				verbose "Port range conflict in servers"
-				p.reject "port range conflict in servers"
+			fail = (msg, err) ->
+				msg = String(msg) + String(err.stack ? err)
+				log.verbose msg
+				p.reject msg
+			if checkConflict @opts.servers then fail "port range conflict"
 			else
 				writeConfig(@).then (=> # write the dynamic configuration
-					verbose "Nginx configuration written."
+					log.verbose "Nginx configuration written."
 					@restart().then p.resolve, p.reject
 				), p.reject
 		), p.reject
 
-	stop: (signal) ->
+	seconds = (ms) -> ms / 1000
+
+	stop: (signal, timeout=30000) ->
 		log "Stopping all children with", signal
 		try return p = $.Progress 1
 		finally
 			for child in @children when child.process
-				try p.include child.stop(signal)
+				try p.include child.stop signal
 				catch err
 					log "Error stopping child:", err.stack ? err
 					p.reject err
-			timeout = setTimeout (->
-				log "Failed to stop children within timeout."
-				process.exit 1
-			), 30000
-			p.on 'progress', (cur, max) ->
-				log "Progress: #{cur}/#{max}"
+			holder = setTimeout (->
+				log "Failed to stop children within #{seconds timeout} seconds."
+			), timeout
 			p.finish(1).then (->
 				log "Fully stopped."
-				clearTimeout timeout
+				clearTimeout holder
 			), (err) -> log "Failed to stop:", err
 
 	restart: (from = 0, done = $.Promise()) -> # perform a careful rolling restart
-		if from is 0 then verbose "Rolling restart starting..."
+		if from is 0 then log.verbose "Rolling restart starting..."
 		try return done
 		finally
 			next = => @restart from + 1, done
@@ -85,25 +82,27 @@ module.exports = class Herd
 			switch true
 				# if the from index is past the end
 				when from >= @children.length
-					verbose "Rolling restart finished."
+					log.verbose "Rolling restart finished."
 					done.resolve()
 				# if there is no such server
 				when not child? then done.reject "invalid child index: #{from}"
-				else verbose "Rolling restart:", from, child.restart().then next, done.reject
+				else log.verbose "Rolling restart:", from, child.restart().then next, done.reject
 
 	writeConfig = (self) ->
 		nginx = self.opts.nginx
 		try return p = $.Promise()
-		finally if nginx.config
-			if not nginx.enabled then p.resolve()
-			else
-				fail = (msg, err) -> p.reject(msg + (err.stack ? err))
-				verbose "Writing nginx configuration to file:", nginx.config
+		finally if (not nginx.enabled) or (not nginx.config)
+			p.resolve()
+		else
+			fail = (msg, err) -> p.reject(msg + (err.stack ? err))
+			try
+				log.verbose "Writing nginx configuration to file:", nginx.config
 				Fs.writeFile nginx.config, buildNginxConfig(self), (err) ->
 					if err then fail "Failed to write nginx configuration file:", err
 					else Process.exec(nginx.reload).wait (err) ->
 						if err then fail "Failed to reload nginx:", err
 						else p.resolve()
+			catch err then fail "writeConfig exception:", err
 
 	buildNginxConfig = (self) ->
 		s = ""
@@ -113,7 +112,7 @@ module.exports = class Herd
 				(pools[child.opts.poolName] or= []).push child
 		for upstream, servers of pools
 			s += self.opts.nginx.template({ upstream, servers })
-		verbose "nginx configuration:\n", s
+		log.verbose "nginx configuration:\n", s
 		s
 
 	listen = (self, p = $.Promise()) ->
@@ -132,7 +131,7 @@ module.exports = class Herd
 				switch true
 					when a is b then continue
 					when a[0] <= b[0] <= a[1] or a[0] <= b[1] <= a[1]
-						verbose "Conflict in port ranges:", a, b
+						log.verbose "Conflict in port ranges:", a, b
 						return true
 		false
 
@@ -140,13 +139,11 @@ module.exports = class Herd
 		clean_exit = -> log "Exiting clean..."; process.exit 0
 		dirty_exit = (err) -> console.error(err); process.exit 1
 
-		###
 		# on SIGINT or SIGTERM, kill everything and die
 		for sig in ["SIGINT", "SIGTERM"] then do (sig) ->
 			process.on sig, ->
 				log "Got signal:", sig
 				self.stop("SIGKILL").then clean_exit, dirty_exit
-		###
 
 		# on SIGHUP, just reload all child procs
 		process.on "SIGHUP", ->
@@ -262,6 +259,6 @@ Herd.defaults = (opts) ->
 		port: 9000
 	}, opts.admin
 
-	verbose "Using configuration:", require('util').inspect(opts)
+	log.verbose "Using configuration:", require('util').inspect(opts)
 
 	return opts
