@@ -29,9 +29,7 @@ function shepherd_start {
 function shepherd_stop {
 	log "Stopping shepherd..."
 	curl -u demo:demo http://localhost:9001/stop
-	# PID=`cat $PID_FILE`
-	# kill -2 $PID || log "Failed to kill shepherd pid:" $PID
-	# rm -f $PID_FILE $JSON_FILE
+	rm -f $PID_FILE $JSON_FILE
 	if $VERBOSE; then
 		kill %1 # kill the tail -f log_file job
 	fi
@@ -41,7 +39,7 @@ function kill_owner {
 	local port=$1
 	local pid=`lsof -Pni :${port} | grep :${port} | awk '{print $2}'`
 	if [ -n "${pid}" ]; then
-		log "Killing $PID (to clear port $PORT)"
+		log "Killing $pid (to clear port $port)"
 		kill -9 ${pid}
 	fi
 }
