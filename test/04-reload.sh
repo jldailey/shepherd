@@ -30,13 +30,15 @@ for PORT in $PORTS; do
 	check_output $PORT
 done
 PID=`cat $PID_FILE`
-echo "Asking to restart..."
-kill -1 $PID
+echo "Asking to reload via http://localhost:9001/reload"
+before=$(get_owners 8003)
+curl -u demo:demo -s 'http://localhost:9001/reload' &> /dev/null
 echo -n "Waiting"
 for i in `seq 1 6`; do
 	echo -n "...$i"
 	sleep 1
 done
+assert_notequal "$before" "$(get_owners 8003)"
 echo " seconds."
 for PORT in $PORTS; do
 	check_output $PORT

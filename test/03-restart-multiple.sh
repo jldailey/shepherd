@@ -29,9 +29,12 @@ shepherd_start
 for PORT in $PORTS; do
 	check_output $PORT
 done
+before=$(get_owners 8003)
 kill_owner 8002
 kill_owner 8003
 sleep 3
 check_output 8002
 check_output 8003
+after=$(get_owners 8003)
+assert_notequal "$before" "$after"
 shepherd_stop
