@@ -28,15 +28,17 @@ module.exports = class Herd
 				else res.pass { name: data.name, version: data.version }
 		Http.get "/tree", (req, res) ->
 			Process.findOne({ pid: process.pid }).then (proc) ->
-				Process.summarize(proc).then (tree) ->
-					res.pass Process.printTree(tree)
+				res.pass Process.printTree(tree)
 		Http.get "/stop", (req, res) =>
 			@stop("SIGTERM").then (->
 				res.pass "Children stopped, closing server."
 				$.delay 100, process.exit
 			), res.fail
+		Http.get "/reload", (req, res) =>
+			@restart()
+			res.redirect 302, "/tree"
 
-		connectRabbit  @ # connect to rabbitmq
+		connectRabbit @ # connect to rabbitmq
 
 	start: (p = $.Promise()) ->
 		try return p
@@ -88,6 +90,19 @@ module.exports = class Herd
 				when not child? then done.reject "invalid child index: #{from}"
 				else log.verbose "Rolling restart:", from, child.restart().then next, done.reject
 
+	# use opts.poolName and opts.nginx.template to render the 'upstream' block for nginx
+	buildNginxConfig = (self) ->
+		s = ""
+		pools = Object.create null
+		for child in self.children
+			if 'poolName' of child.opts and 'port' of child
+				(pools[child.opts.poolName] or= []).push child
+		for upstream, servers of pools
+			s += self.opts.nginx.template({ upstream, servers, pre: "", post: "" })
+		log.verbose "nginx configuration:\n", s
+		s
+
+	# write the nginx config to a file
 	writeConfig = (self) ->
 		nginx = self.opts.nginx
 		try return p = $.Promise()
@@ -103,17 +118,6 @@ module.exports = class Herd
 						if err then fail "Failed to reload nginx:", err
 						else p.resolve()
 			catch err then fail "writeConfig exception:", err
-
-	buildNginxConfig = (self) ->
-		s = ""
-		pools = Object.create null
-		for child in self.children
-			if 'poolName' of child.opts and 'port' of child
-				(pools[child.opts.poolName] or= []).push child
-		for upstream, servers of pools
-			s += self.opts.nginx.template({ upstream, servers })
-		log.verbose "nginx configuration:\n", s
-		s
 
 	listen = (self, p = $.Promise()) ->
 		port = self.opts.admin.port
@@ -174,34 +178,24 @@ module.exports = class Herd
 							sub.on 'drain', on_data
 				}
 
-
-		rabbitRoute = (pattern, handler) -> $.publish("amqp-route", self.opts.rabbitmq.exchange, pattern, handler)
+		rabbitRoute = (pattern, handler) ->
+			$.publish "amqp-route", self.opts.rabbitmq.exchange, pattern, handler
 		# Restart all via AMQP message:
 		rabbitRoute { to: self.shepherdId, op: "restart" }, self.restart.bind self
 		# Response to a status query via AMQP message:
 		rabbitRoute { op: "ping" }, (msg) ->
 			unless 'ts' of msg
 				return log "Malformed PING message from rabbitmq:", msg
-			collectStatus($(self.servers).select 'process.pid').then (servers) ->
-				collectStatus($(self.workers).select 'process.pid').then (workers) ->
-					self.rabbitmq.publish {
-						op: "pong"
-						from: self.shepherdId
-						ts: $.now, dt: $.now - msg.ts
-						status: { servers, workers }
-					}
+			collectStatus($(self.children).select 'process.pid').then (children) ->
+				self.rabbitmq.publish {
+					op: "pong"
+					from: self.shepherdId
+					ts: $.now, dt: $.now - msg.ts
+					children: children
+				}
 
-	nginxTemplate = Handlebars.compile """
-		upstream {{upstream}} {
-			{{#each servers}}
-			server 127.0.0.1:{{this.port}} weight=1;
-			{{/each}}
-			keepalive 32;
-		}
-	"""
-
-
-	collectStatus = (pids) -> Process.find { pid }
+	collectStatus = (pids) ->
+		$.Promise.collect (Process.find { pid } for pid in pids)
 
 # make sure a herd object has all the default configuration
 Herd.defaults = (opts) ->
@@ -231,7 +225,7 @@ Herd.defaults = (opts) ->
 		else
 			enabled: false
 			config: null
-			reload: "echo I don't know how to reload nginx on platform: " + Os.platform()
+			reload: "echo WARN: I don't know how to reload nginx on platform: " + Os.platform()
 		), opts.nginx
 
 	opts.nginx.template or= """
@@ -245,7 +239,7 @@ Herd.defaults = (opts) ->
 		}
 	"""
 	opts.nginx.template = Handlebars.compile opts.nginx.template
-	opts.nginx.template.inspect = (level) ->
+	opts.nginx.template.inspect = (level) -> # use a mock rendering as standard output
 		return '"' + opts.nginx.template({
 			upstream: "{{upstream}}",
 			pre: "{{#each servers}}"
