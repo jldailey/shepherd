@@ -16,6 +16,17 @@ function log {
 	if $VERBOSE; then echo $1; fi
 }
 
+function assert_notequal {
+	local a=$1
+	local b=$2
+	if [ "$a" != "$b" ]; then
+		echo "PASS"
+	else
+		echo "FAIL: '$b' should != '$a'"
+	fi
+}
+
+
 mkdir -p `dirname $LOG_FILE`
 touch $LOG_FILE
 
@@ -28,7 +39,7 @@ function shepherd_start {
 
 function shepherd_stop {
 	log "Stopping shepherd..."
-	curl -u demo:demo http://localhost:9001/stop
+	curl -u demo:demo http://localhost:9001/stop &> /dev/null
 	rm -f $PID_FILE $JSON_FILE
 	if $VERBOSE; then
 		kill %1 # kill the tail -f log_file job
