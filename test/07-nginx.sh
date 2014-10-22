@@ -37,12 +37,21 @@ shepherd_start
 for PORT in $PORTS; do
 	check_output $PORT
 done
-PID=`cat $PID_FILE`
-CHILDREN=`ps -eo pid,ppid,command | grep node | grep -v grep | wc -l`
 shepherd_stop
-if [ "$CHILDREN" -ne 9 ]; then
-	echo "FAIL: Expected 9 children, got '$CHILDREN'"
-	exit 1
+EX=/tmp/07-nginx.config.expected
+echo "upstream shepherd_pool {"              > $EX
+echo "	"                                   >> $EX
+for PORT in $PORTS; do
+	echo "	server 127.0.0.1:$PORT weight=1;" >> $EX; done
+echo "	"                                   >> $EX
+echo "	keepalive 32;"                      >> $EX
+echo -n "}"                                 >> $EX
+
+git diff $EX /tmp/07-nginx.config
+ret=$?
+if [ $ret == 0 ]; then
+	echo PASS
+	rm $EX /tmp/07-nginx.config
 else
-	echo "PASS"
+	echo "FAIL"
 fi
