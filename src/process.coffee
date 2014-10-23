@@ -165,17 +165,22 @@ Process.killTree = (proc, signal) ->
 			proc = switch $.type proc
 				when 'string','number' then { pid: proc }
 				else proc
+			tokill = []
+			fail = (msg, err) ->
+				log msg, err?.stack ? err
+				p.reject err
 			Process.tree(proc).then ((tree) ->
 				try
 					Process.walk tree, (node) ->
-						if node.pid then Process.kill node.pid, signal
-						else log "killTree invalid node:", node
-					p.resolve()
-				catch err
-					log "killTree error while walking:", err.stack ? err
+						if node.pid then tokill.push node.pid
+						else fail "killTree invalid node (no pid):", node
+					if tokill.length
+						Process.exec("kill -#{signal} #{tokill.join ' '} &> /dev/null")
+							.then p.resolve, (err) ->
+								fail "killTree error while killing", err
+				catch err then fail "killTree error while walking:", err
 			), p.reject
-		catch err
-			log "killTree error:", err.stack ? err
+		catch err then fail "killTree error:", err
 
 Process.summarize = (proc) -> # currently kind of worthless, needs to use depth
 	proc.rss = proc.cpu = 0
@@ -188,7 +193,7 @@ Process.summarize = (proc) -> # currently kind of worthless, needs to use depth
 
 Process.printTree = (proc, indent, spacer) ->
 	try
-		spacer or= "\\_"
+		spacer or= " \\_"
 		indent or= "* "
 		ret = indent + proc.pid + " " + proc.command
 		if proc.ports?.length then ret += " [:" + proc.ports.join(", :") + "]"
