@@ -69,11 +69,12 @@ class Child
 					@process = null
 					@started.reset()
 					@started.attempts = 0
-					@expectedExit = false
 					@start().then p.resolve, p.reject
 				catch err
 					log "restart error:", err.stack ? err
+					p.reject err
 			log "Killing existing process", @process.pid
+			@expectedExit = true
 			Process.killTree(@process.pid, "SIGTERM").wait @opts.restart.gracePeriod, (err) ->
 				try
 					if err is "timeout"
@@ -84,19 +85,16 @@ class Child
 					else restart()
 				catch err
 					log "restart error during kill tree:", err.stack ? err
+					p.reject err
 
 	onExit: (code, signal) ->
 		try
-			pid = @process.pid
-			# Record the death of the child
-			@process = null
-			exitSignal = if $.is('number', code) then code - 128
-			else Process.getSignalNumber(signal)
-			@log "Child PID: #{pid} exited (exitSignal=#{exitSignal})"
-			# if it died with a restartable exit code, attempt to restart it
-			unless @expectedExit then @restart()
+			signal = if $.is 'number', code then code - 128 else Process.getSignalNumber signal
+			@log "Child exited (signal=#{signal})", if @expectedExit then "(expected)" else ""
+			@restart() unless @expectedExit
+			@expectedExit = false
 		catch err
-			log "child.onExit error:", err.stack ? err
+			@log "child.onExit error:", err.stack ? err
 
 	toString: toString = ->
 		try return "#{@constructor.name}[#{@index}]"
@@ -145,9 +143,9 @@ class Child
 
 class Worker extends Child
 	Http.get "/workers", (req, res) ->
-		res.pass "[" +
+		res.pass """[#{
 			("[#{worker.process?.pid ? "DEAD"}, #{worker.port}]" for worker in workers).join ",\n"
-		+ "]"
+		}]"""
 	Http.get "/workers/restart", (req, res) ->
 		for worker in workers
 			worker.restart()
