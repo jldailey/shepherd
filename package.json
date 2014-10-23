@@ -2,18 +2,15 @@
   "name": "the-shepherd",
   "version": "0.2.0",
   "description": "Control a herd of wild processes.",
-  "main": "shepherd.coffee",
+  "main": "lib/herd.js",
   "bin": {
     "shepherd": "bin/shepherd"
   },
   "scripts": {
-    "test": "mocha test/test.js"
+    "test": "make test"
   },
   "author": "Jesse Dailey <jesse.dailey@gmail.com>",
-  "repository": {
-    "type": "git",
-    "url": "git@github.ua.com:jdailey/shepherd.git"
-  },
+  "repository": "https://github.com/jldailey/shepherd.git",
   "dependencies": {
     "bling": "latest",
     "shelljs": "0.2.6",
@@ -24,9 +21,5 @@
     "daemon": "1.1.0",
     "hjson": "latest",
     "basic-auth": "latest"
-  },
-  "devDependencies": {
-    "mocha": "latest",
-    "request": "^2.34.0"
   }
 }
