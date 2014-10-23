@@ -28,7 +28,8 @@ module.exports = class Herd
 				else res.pass { name: data.name, version: data.version }
 		Http.get "/tree", (req, res) ->
 			Process.findOne({ pid: process.pid }).then (proc) ->
-				res.pass Process.printTree(tree)
+				Process.tree(proc).then (tree) ->
+					res.pass Process.printTree(tree)
 		Http.get "/stop", (req, res) =>
 			@stop("SIGTERM").then (->
 				res.pass "Children stopped, closing server."
