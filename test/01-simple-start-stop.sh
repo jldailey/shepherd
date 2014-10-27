@@ -7,7 +7,7 @@ echo '
 {
 	"servers": [ {
 		"count": 3,
-		"port": 8001,
+		"port": 9002,
 		"cd": "test/server",
 		"command": "node app.js"
 	} ],
@@ -16,7 +16,7 @@ echo '
 	"rabbitmq": { "enabled": false }
 }
 ' > $JSON_FILE
-PORTS="8001 8002 8003"
+PORTS="9002 9003 9004"
 
 # this test is not concerned with starting 'over the top'
 # of an already running instance, so we kill it all first

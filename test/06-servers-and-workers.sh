@@ -6,8 +6,8 @@ source $ROOT/test/common.sh
 echo '
 {
 	"servers": [ {
-		"count": 2,
-		"port": 8001,
+		"count": 3,
+		"port": 9002,
 		"cd": "test/server",
 		"command": "node app.js"
 	} ],
@@ -21,7 +21,7 @@ echo '
 	"rabbitmq": { "enabled": false }
 }
 ' > $JSON_FILE
-PORTS="8001 8002"
+PORTS="9002 9003 9004"
 
 # this test is not concerned with starting 'over the top'
 # of an already running instance, so we kill it all first
@@ -37,7 +37,7 @@ done
 PID=`cat $PID_FILE`
 CHILDREN=`ps -eo pid,ppid,command | grep node | grep -v grep | wc -l`
 shepherd_stop
-if [ "$CHILDREN" -ne 9 ]; then
+if [ "$CHILDREN" -ne 11 ]; then
 	echo "FAIL: Expected 9 children, got '$CHILDREN'"
 	exit 1
 else

@@ -17,9 +17,6 @@ echo '
 ' > $JSON_FILE
 
 kill_owner 9001
-kill_owner 8001
-kill_owner 8002
-kill_owner 8003
 
 shepherd_start
 PID=`cat $PID_FILE`

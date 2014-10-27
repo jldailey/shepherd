@@ -7,7 +7,7 @@ echo '
 {
 	"servers": [ {
 		"count": 3,
-		"port": 8001,
+		"port": 9002,
 		"cd": "test/server",
 		"command": "node app.js"
 	} ],
@@ -16,7 +16,7 @@ echo '
 	"rabbitmq": { "enabled": false }
 }
 ' > $JSON_FILE
-PORTS="8001 8002 8003"
+PORTS="9002 9003 9004"
 
 # this test is not concerned with starting 'over the top'
 # of an already running instance, so we kill it all first
@@ -29,11 +29,11 @@ shepherd_start
 for PORT in $PORTS; do
 	check_output $PORT
 done
-before=$(get_owners 8002)
-kill_owner 8002
+before=$(get_owners 9003)
+kill_owner 9003
 sleep 3
-check_output 8002 
-after=$(get_owners 8002)
+check_output 9003 
+after=$(get_owners 9003)
 if [ "$before" != "$after" ]; then
 	echo "PASS"
 else
