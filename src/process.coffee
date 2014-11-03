@@ -72,6 +72,8 @@ attach_ports = (procs) ->
 						continue if line.length < 8
 						pid = parseInt line[1], 10
 						port = parseInt line[8].split(/:/)[1], 10
+						unless pid of index
+							index[pid] = { pid: pid, ports: [] }
 						try
 							index[pid].ports.push port
 						catch err
