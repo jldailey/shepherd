@@ -1,22 +1,3 @@
 
-x support more than one server type to be launched
-x	- and that the pools don't overlap ports
-
-x support count < 0 (means count: -3 means numCpu - 3)
-x - "exec": { ..., "count": -1 }
-
-x support a custom nginx upstream name per pool (currently hard coded to "shepherd_pool")
-x - "nginx": { "upstream": "shepherd_pool" }
-
-x support custom "server" lines within the pool definition (via handlebars)
-x		- server {{server}} max_fails=2 foo=bar;
-x   - done by allowing a whole template in HJSON format
-x		- nginx: { template: ''' ... ''' }
-
-x (optional) pull all the webRoute stuff out so it supports multiple Herds
-x		- new Herd instances would register somewhere global
-
-Don't use Unix signals for stop/restart/reload
-	- use REST endpoints
-
 Add to homepage: a list of REST endpoints
+
