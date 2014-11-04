@@ -115,6 +115,11 @@ Process.findOne = (query) ->
 		catch err then log "findOne error:", err.stack ? err
 	), p.reject
 
+Process.findTree = (query) ->
+	try return p = $.Promise()
+	finally Process.findOne(query).then (proc) ->
+		Process.tree(proc).then p.resolve, p.reject
+
 Process.signals = signals = {
 	SIGHUP: 1
 	SIGINT: 2
