@@ -31,7 +31,10 @@ Rabbit = require '$FULL/src/rabbit.coffee'
 
 Rabbit.connect('$AMQP_URL').then ->
 	count = 0
-	setTimeout (-> process.exit 1), 1000
+	setTimeout (->
+		console.log 'FAIL (timeout)'
+		process.exit 1
+	), 3000
 	Rabbit.subscribe '$AMQP_CHANNEL', (msg) ->
 		if msg.op is 'pong'
 			console.log 'PASS'
