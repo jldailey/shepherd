@@ -33,14 +33,13 @@ Rabbit.connect('$AMQP_URL').then ->
 	count = 0
 	setTimeout (-> process.exit 1), 1000
 	Rabbit.subscribe '$AMQP_CHANNEL', (msg) ->
-		console.log 'rvcd:', msg
-		if msg.op is 'pong' then process.exit 0
+		if msg.op is 'pong'
+			console.log 'PASS'
+			process.exit 0
 	setTimeout (->
 		Rabbit.publish '$AMQP_CHANNEL', { op: 'ping' }
 	), 200
 " > $COFFEE_FILE
-
-cat $COFFEE_FILE
 
 # this test is not concerned with starting 'over the top'
 # of an already running instance, so we kill it all first
