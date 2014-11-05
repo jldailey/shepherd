@@ -3,6 +3,7 @@
 ROOT=`dirname $0`/..
 TEST_NAME=`basename $0 | sed s/\.sh//`
 JSON_FILE=/tmp/${TEST_NAME}.json
+COFFEE_FILE=/tmp/${TEST_NAME}.coffee
 PID_FILE=/tmp/${TEST_NAME}.pid
 LOG_FILE=/tmp/${TEST_NAME}.log
 echo > $LOG_FILE
@@ -40,7 +41,7 @@ function shepherd_start {
 function shepherd_stop {
 	log "Stopping shepherd..."
 	curl -u demo:demo http://localhost:9001/stop &> /dev/null
-	rm -f $PID_FILE $JSON_FILE
+	rm -f $PID_FILE $JSON_FILE $COFFEE_FILE
 	if $VERBOSE; then
 		kill %1 # kill the tail -f log_file job
 	fi
