@@ -3,19 +3,17 @@ RabbitJS = require 'rabbit.js'
 Opts = require './opts'
 log = $.logger "[rabbit]"
 verbose = (a...) -> if Opts.verbose then log a...
-
 ready = $.Promise()
 
-property = (v) -> (n) -> v = n ? v
+rabbitUrl     = -> $.config("AMQP_URL", "amqp://localhost:5672")
+rabbitChannel = -> $.config("AMQP_CHANNEL", "test")
 
 # note-taking for multiple subscriptions to the same channel
 sockets = Object.create null
 patterns = Object.create null
 
 $.extend module.exports, Rabbit = {
-	defaultChannel: property("shepherd")
-	defaultUrl:     property("amqp://localhost:5672")
-	connect:   (url = Rabbit.defaultUrl()) ->
+	connect:   (url = rabbitUrl()) ->
 		log "Connecting to...", url
 		context = RabbitJS.createContext url
 		context.on "ready", ->
@@ -25,7 +23,7 @@ $.extend module.exports, Rabbit = {
 			log "Failed to connect to",url,err
 			ready.reject err
 		return ready
-	publish:   (m, c = Rabbit.defaultChannel()) ->
+	publish:   (m, c = rabbitChannel()) ->
 		try return p = $.Promise()
 		finally ready.wait (err, context) ->
 			pub = context.socket 'PUB'
@@ -33,15 +31,12 @@ $.extend module.exports, Rabbit = {
 				pub.write JSON.stringify(m), 'utf8'
 				pub.close()
 				p.resolve()
-	match: (p, h) -> Rabbit.subscribe Rabbit.defaultChannel(), p, h
+	match: (p, h) -> Rabbit.subscribe rabbitChannel(), p, h
 	subscribe: (c, p, h) ->
 		if $.is 'function', c
-			h = c
-			p = null
-			c = Rabbit.defaultChannel()
+			[h, p, c] = [c, null, rabbitChannel()]
 		else if $.is 'function', p
-			h = p
-			p = null
+			[h, p] = [p, null]
 		p ?= $.matches.Any
 		ready.wait (err, context) ->
 			verbose "adding route:", c, $.toRepr p
@@ -68,11 +63,14 @@ $.extend module.exports, Rabbit = {
 }
 
 if require.main is module
+	$.config.set "AMQP_URL", $.config.get "AMQP_URL", "amqp://test:test@130.211.112.10:5672"
+	$.config.set "AMQP_CHANNEL", $.config.get "AMQP_CHANNEL", "test"
 	Rabbit.connect().then ->
-		Rabbit.defaultChannel("test-messages")
 		Rabbit.subscribe (m) ->
-			console.log "->:", m
+			elapsed = $.now - m.ts
+			console.log "(#{elapsed}ms)->:", m
 		$.delay 100, ->
-			Rabbit.publish({ some: "stuff" }).then ->
+			log "publishing..."
+			Rabbit.publish({ some: "stuff", ts: $.now }).then ->
 				$.delay 100, ->
 					process.exit 0
