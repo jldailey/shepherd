@@ -41,21 +41,25 @@ module.exports = class Herd
 			res.redirect 302, "/tree"
 
 		r = @opts.rabbitmq
-		if r.enabled and r.url
+		if r.enabled and r.url and r.channel
 			Rabbit = require './rabbit'
-			Rabbit.connect(r.url)
-			my = (o) => extend { id: @shepherdId }, o
-			Rabbit.match { op: "ping" }, (msg) ->
+			do ->
+				connection = r.url
+				$.interval 3000, ->
+					if r.url isnt connection
+						Rabbit.reconnect r.url
+			Rabbit.connect r.url
+			my = (o) => $.extend { id: @shepherdId }, o
+			Rabbit.subscribe r.channel, { op: "ping" }, (msg) ->
 				Process.findTree({ pid: process.pid }).then (tree) ->
-					Rabbit.publish my { op: "pong", tree: tree }
-			Rabbit.match my( op: "stop" ), (msg) =>
+					Rabbit.publish r.channel, my { op: "pong", tree: tree }
+			Rabbit.subscribe r.channel, my( op: "stop" ), (msg) =>
 				@stop("SIGTERM").then ->
-					Rabbit.publish my { op: "stopped" }
+					Rabbit.publish r.channel, my { op: "stopped" }
 					$.delay 300, process.exit
-			Rabbit.match my( op: "reload" ), (msg) ->
+			Rabbit.subscribe r.channel, my( op: "reload" ), (msg) =>
 				@restart()
-				Rabbit.publish my { op: "restarting" }
-
+				Rabbit.publish r.channel, my { op: "restarting" }
 
 	start: (p = $.Promise()) ->
 		try return p
@@ -67,8 +71,8 @@ module.exports = class Herd
 				p.reject msg
 			if checkConflict @opts.servers then fail "port range conflict"
 			else
-				writeConfig(@).then (=> # write the dynamic configuration
-					verbose "Nginx configuration written."
+				writeConfig(@).then ((msg) => # write the dynamic configuration
+					verbose msg
 					@restart().then p.resolve, p.reject
 				), p.reject
 		), p.reject
@@ -80,6 +84,7 @@ module.exports = class Herd
 		try return p = $.Progress 1
 		finally
 			for child in @children when child.process
+				verbose "Attempting to stop child:", child.process.pid, signal
 				try p.include child.stop signal
 				catch err
 					log "Error stopping child:", err.stack ? err
@@ -124,7 +129,7 @@ module.exports = class Herd
 		nginx = self.opts.nginx
 		try return p = $.Promise()
 		finally if (not nginx.enabled) or (not nginx.config)
-			p.resolve()
+			p.resolve("Nginx configuration not enabled.")
 		else
 			fail = (msg, err) -> p.reject(msg + (err.stack ? err))
 			try
@@ -133,7 +138,7 @@ module.exports = class Herd
 					if err then fail "Failed to write nginx configuration file:", err
 					else Process.exec(nginx.reload).wait (err) ->
 						if err then fail "Failed to reload nginx:", err
-						else p.resolve()
+						else p.resolve("Nginx configuration written.")
 			catch err then fail "writeConfig exception:", err
 
 	listen = (self, p = $.Promise()) ->
@@ -191,7 +196,7 @@ Herd.defaults = (opts) ->
 	opts.rabbitmq = $.extend Object.create(null), {
 		enabled: false
 		url: "amqp://localhost:5672"
-		exchange: "shepherd"
+		channel: "shepherd"
 	}, opts.rabbitmq
 
 	opts.nginx = $.extend Object.create(null), (switch Os.platform()

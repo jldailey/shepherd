@@ -5,72 +5,93 @@ log = $.logger "[rabbit]"
 verbose = (a...) -> if Opts.verbose then log a...
 ready = $.Promise()
 
-rabbitUrl     = -> $.config("AMQP_URL", "amqp://localhost:5672")
-rabbitChannel = -> $.config("AMQP_CHANNEL", "test")
+class Rabbit extends $.Promise
+	constructor: -> super @
 
-# note-taking for multiple subscriptions to the same channel
-sockets = Object.create null
-patterns = Object.create null
-
-$.extend module.exports, Rabbit = {
-	connect:   (url = rabbitUrl()) ->
-		log "Connecting to...", url
+	connect: (url) ->
+		if @resolved or @rejected then @reconnect(url)
+		verbose "Connecting to...", url
 		context = RabbitJS.createContext url
-		context.on "ready", ->
-			log "Connected."
-			ready.resolve context
-		context.on "error", (err) ->
+		# note-taking for multiple subscriptions to the same channel
+		context._sockets = Object.create null
+		context._patterns = Object.create null
+		# note-taking for auto-reconnect code
+		context._url = url
+		context.on "ready", =>
+			verbose "Connected."
+			connected_to = url
+			@resolve context
+		context.on "error", (err) =>
 			log "Failed to connect to",url,err
-			ready.reject err
-		return ready
-	publish:   (m, c = rabbitChannel()) ->
+			@reject err
+		@
+
+	reconnect: (url) ->
+		unless @resolved or @rejected then @connect(url)
+		else @wait (err, context) =>
+			@reset()
+			verbose "Reconnecting...", url
+			if context
+				for chan, list of context._patterns # unpack existing subscriptions
+					for args in list # queue them up to be resubscribed once the new connection is ready
+						verbose "Re-subscribing...", chan, args.p
+						@subscribe chan, args.p, args.h
+			@connect(url)
+
+	publish:   (chan, msg) ->
+		if arguments.length < 2 or (not $.is 'string', chan)
+			throw new Error("Invalid arguments to publish 0: #{String chan} 1: #{String msg}")
 		try return p = $.Promise()
-		finally ready.wait (err, context) ->
+		finally @then (context) ->
 			pub = context.socket 'PUB'
-			pub.connect c, ->
-				pub.write JSON.stringify(m), 'utf8'
+			pub.connect chan, ->
+				pub.write JSON.stringify(msg), 'utf8'
 				pub.close()
 				p.resolve()
-	match: (p, h) -> Rabbit.subscribe rabbitChannel(), p, h
+
 	subscribe: (c, p, h) ->
-		if $.is 'function', c
+		if $.is 'function', c      # support (func) arguments as (default, null, func)
 			[h, p, c] = [c, null, rabbitChannel()]
-		else if $.is 'function', p
+		else if $.is 'function', p # support (chan, func) arguments as (chan, null, func)
 			[h, p] = [p, null]
+		# otherwise, assume arguments as (chan, pattern, func)
 		p ?= $.matches.Any
-		ready.wait (err, context) ->
-			verbose "adding route:", c, $.toRepr p
+		@then (context) ->
+			verbose "adding rabbit subscription:", c, $.toRepr p
 			if err? then return log "error:", err
-			sub = sockets[c]
+			sub = context._sockets[c]
 			args = { p, h }
 			onData = null
 			if sub? # we already have subscriptions to this channel
-				patterns[c].push args
+				context._patterns[c].push args
+				verbose "subscribed to channel", c, p
 			else
-				patterns[c] = [ args ]
-				sockets[c] = sub = context.socket 'SUB'
+				context._patterns[c] = [ args ]
+				context._sockets[c] = sub = context.socket 'SUB'
 				sub.on 'data', onData = (data) ->
 					try data = JSON.parse data
 					catch err then return log "JSON.parse error:", err.message, "in", data
-					list = patterns[c]
-					for args in list
-						if $.matches args.p, data
-							try args.h data
-							catch err then log "error in handler:", err.stack
+					for args in context._patterns[c] when $.matches args.p, data
+						try args.h data
+						catch err then log "error in handler:", err.stack
 				sub.on 'drain', onData
 				sub.connect c, ->
 					verbose "subscribed to channel", c, p
-}
+
+$.extend module.exports, new Rabbit()
 
 if require.main is module
-	$.config.set "AMQP_URL", $.config.get "AMQP_URL", "amqp://test:test@130.211.112.10:5672"
-	$.config.set "AMQP_CHANNEL", $.config.get "AMQP_CHANNEL", "test"
-	Rabbit.connect().then ->
-		Rabbit.subscribe (m) ->
-			elapsed = $.now - m.ts
-			console.log "(#{elapsed}ms)->:", m
+	rabbit = new Rabbit()
+	url = $.config.get("AMQP_URL", "amqp://test:test@130.211.112.10:5672")
+	chan = $.config.get("AMQP_CHANNEL", "test")
+	rabbit.connect(url).then ->
+		rabbit.subscribe chan, (m) ->
+			console.log "(#{$.now - m.ts}ms)->:", m
 		$.delay 100, ->
 			log "publishing..."
-			Rabbit.publish({ some: "stuff", ts: $.now }).then ->
+			rabbit.publish(chan, { op: "ping", ts: $.now }).then ->
 				$.delay 100, ->
-					process.exit 0
+					rabbit.reconnect(url).then ->
+						rabbit.publish(chan, { op: "ping", ts: $.now }).then ->
+							$.delay 100, ->
+								process.exit 0
