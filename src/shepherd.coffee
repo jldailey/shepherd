@@ -4,24 +4,24 @@ if Opts.daemon then require('daemon') { # fork into the background
 }
 $       = require "bling"
 Fs      = require "fs"
+log     = $.logger "[shepherd]"
 die     = (a...) ->
-	console.log a...
+	log a...
 	process.exit 1
 
 if Opts.O is "-"
-	try outStream = process.stdout
+	try outStr = process.stdout
 	catch err then die "Failed to open stdout:", err.stack
 else
-	try outStream = Fs.createWriteStream Opts.O, { flags: 'a', mode: 0o666, encoding: 'utf8' }
+	try outStr = Fs.createWriteStream Opts.O, { flags: 'a', mode: 0o666, encoding: 'utf8' }
 	catch err then die "Failed to open output stream:", err.stack
 
 $.log.out = (a...) ->
-	try outStream.write a.map($.toString).join(' ') + "\n", 'utf8'
+	try outStr.write a.map($.toString).join(' ') + "\n", 'utf8'
 	catch err then die "Failed to write to log:", err.stack
 
 Helpers = require './helpers'
 Herd    = require './herd'
-log     = $.logger "[shepherd]"
 
 if Opts.example
 	d = Herd.defaults()

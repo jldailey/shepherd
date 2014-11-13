@@ -33,7 +33,7 @@ Helpers.portIsOwned = (pid, port, timeout, verbose) ->
 	finally
 		started = $.now
 		do poll_port = ->
-			if  $.now - started > timeout
+			if $.now - started > timeout
 				return p.reject "Waiting failed after a timeout of: " + timeout + "ms"
 			target_pids = []
 			# find all children of our target pid
