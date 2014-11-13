@@ -9,13 +9,10 @@ log     = $.logger "[helper]"
 
 # Make a helper for reading JSON data (through a Promise)
 Helpers.readJson = (file, p) ->
-	# Use a default (empty) promise
-	p ?= $.Promise()
-	# Set a default error handler
-	p.wait (err, obj) ->
+	p ?= $.Promise() # Use a default (empty) promise
+	p.wait (err, obj) -> # Set a default error handler
 		if err then return log("readJson(" + file + ") failed:", err)
-	# Read the file
-	Fs.readFile file, (err, data) ->
+	Fs.readFile file, (err, data) -> # Read the file
 		if err then return p.reject err
 		try p.resolve HJson.parse String data
 		catch _err then p.reject _err

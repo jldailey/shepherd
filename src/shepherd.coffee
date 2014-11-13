@@ -31,7 +31,7 @@ if Opts.example
 	console.log JSON.stringify d, null, '  '
 	process.exit 0
 
-if Opts.P # write out a pid file
+if Opts.P and Opts.daemon # write out a pid file
 	Fs.writeFileSync Opts.P, String process.pid
 
 Helpers.readJson(Opts.F).wait (err, config) ->
