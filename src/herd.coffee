@@ -1,23 +1,33 @@
 [$, Os, Fs, Handlebars, Shell, Process, { Server, Worker },
-	Http, Opts, Helpers, Rabbit ] =
+	Http, Opts, Helpers, Rabbit, Convert] =
 [ 'bling', 'os', 'fs', 'handlebars', 'shelljs', './process', './child',
-	'./http', './opts', './helpers', './rabbit'
+	'./http', './opts', './helpers', 'rabbit-pubsub', './convert'
 ].map require
 
+# loggers
 log = $.logger "[herd-#{$.random.string 4}]"
 verbose = -> if Opts.verbose then log.apply null, arguments
 
-module.exports = class Herd
+# constants
+listen_retry_interval = 200 # ms
+stop_delay            = 300 # ms
+default_stop_timeout  = Convert(30).seconds.to.ms
+clean_exit_code       = 0
+dirty_exit_code       = 1
 
+module.exports = \
+class Herd
 	constructor: (opts) ->
 		@opts = Herd.defaults(opts)
 		@shepherdId = [Os.hostname(), @opts.admin.port].join(":")
 		@children = []
 		connectSignals @ # register our process signal handlers
+		# create Server objects
 		for opts in @opts.servers
 			for index in [0...opts.count] by 1
 				verbose "Creating server:", opts, index
 				@children.push new Server opts, index
+		# create Worker objects
 		for opts in @opts.workers
 			for index in [0...opts.count] by 1
 				verbose "Creating worker:", opts, index
@@ -34,36 +44,35 @@ module.exports = class Herd
 		Http.get "/stop", (req, res) =>
 			@stop("SIGTERM").then (->
 				res.pass "Children stopped, closing server."
-				$.delay 300, process.exit
+				$.delay stop_delay, process.exit
 			), res.fail
 		Http.get "/reload", (req, res) =>
 			@restart()
 			res.redirect 302, "/tree"
 
+		my = (o) => $.extend { id: @shepherdId }, o
 		r = @opts.rabbitmq
 		if r.enabled and r.url and r.channel
-			Rabbit = require './rabbit'
-			do ->
-				connection = r.url
-				$.interval 3000, ->
-					if r.url isnt connection
-						Rabbit.reconnect r.url
+			verbose "Connecting to #{r.url} channel: #{r.channel}..."
 			Rabbit.connect r.url
-			my = (o) => $.extend { id: @shepherdId }, o
-			Rabbit.subscribe r.channel, { op: "ping" }, (msg) ->
+			Rabbit.subscribe r.channel, { op: "status" }, (msg) ->
 				Process.findTree({ pid: process.pid }).then (tree) ->
-					Rabbit.publish r.channel, my { op: "pong", tree: tree }
+					Rabbit.publish r.channel, my { op: "status-reply", tree: tree }
 			Rabbit.subscribe r.channel, my( op: "stop" ), (msg) =>
 				@stop("SIGTERM").then ->
-					Rabbit.publish r.channel, my { op: "stopped" }
-					$.delay 300, process.exit
+					$.delay stop_delay, process.exit
 			Rabbit.subscribe r.channel, my( op: "reload" ), (msg) =>
 				@restart()
-				Rabbit.publish r.channel, my { op: "restarting" }
+
+	setStatus: (@status, args) ->
+		verbose "Changing status to:", @status
+		Rabbit.publish @opts.rabbitmq.channel, my { op: "status", status: @status, args: args }
 
 	start: (p = $.Promise()) ->
+		@setStatus "starting"
 		try return p
 		finally listen(@).then (=> # start the admin server
+			p.then (-> @setStatus "started"), ((err) -> @setStatus "failed: #{String err}")
 			log "Admin server listening on port:", @opts.admin.port
 			fail = (msg, err) ->
 				msg = String(msg) + String(err.stack ? err)
@@ -77,9 +86,9 @@ module.exports = class Herd
 				), p.reject
 		), p.reject
 
-	seconds = (ms) -> ms / 1000
 
-	stop: (signal, timeout=30000) ->
+	stop: (signal, timeout=default_stop_timeout) ->
+		@setStatus "stopping"
 		log "Stopping all children with", signal
 		try return p = $.Progress 1
 		finally
@@ -90,12 +99,14 @@ module.exports = class Herd
 					log "Error stopping child:", err.stack ? err
 					p.reject err
 			holder = setTimeout (->
-				log "Failed to stop children within #{seconds timeout} seconds."
+				log "Failed to stop children within #{timeout} seconds."
+				p.reject "timeout"
 			), timeout
-			p.finish(1).then (->
-				log "Fully stopped."
+			p.finish(1).then (=>
+				@setStatus "stopped"
 				clearTimeout holder
-			), (err) -> log "Failed to stop:", err
+			), (err) ->
+				@setStatus "failed to stop", err?.stack ? err
 
 	restart: (from = 0, done = $.Promise()) -> # perform a careful rolling restart
 		if from is 0 then verbose "Rolling restart starting..."
@@ -143,11 +154,14 @@ module.exports = class Herd
 
 	listen = (self, p = $.Promise()) ->
 		port = self.opts.admin.port
+		p.then $.identity, (err) ->
+			self.setStatus "listen failed: #{ err?.stack ? err }"
 		try return p
 		finally Process.clearCache().findOne({ ports: port }).then (owner) ->
 			if owner?
 				log "Killing old listener on port (#{port}): #{owner.pid}"
-				Process.clearCache().kill(owner.pid, "SIGTERM").then -> $.delay 100, -> listen self
+				Process.kill(owner.pid, "SIGTERM").then ->
+					$.delay listen_retry_interval, -> listen self
 			else Http.listen(port).then p.resolve, p.reject
 
 	checkConflict = (servers) ->
@@ -162,8 +176,8 @@ module.exports = class Herd
 		false
 
 	connectSignals = (self) ->
-		clean_exit = -> log "Exiting clean..."; process.exit 0
-		dirty_exit = (err) -> console.error(err); process.exit 1
+		clean_exit = -> log "Exiting clean..."; process.exit clean_exit_code
+		dirty_exit = (err) -> console.error(err); process.exit dirty_exit_code
 
 		# on SIGINT or SIGTERM, kill everything and die
 		for sig in ["SIGINT", "SIGTERM"] then do (sig) ->
@@ -178,10 +192,6 @@ module.exports = class Herd
 
 		process.on "exit", (code) ->
 			log "shepherd.on 'exit',", code
-
-
-	collectStatus = (pids) ->
-		$.Promise.collect (Process.find { pid } for pid in pids)
 
 # make sure a herd object has all the default configuration
 Herd.defaults = (opts) ->
