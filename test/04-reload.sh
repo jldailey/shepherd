@@ -32,7 +32,7 @@ done
 PID=`cat $PID_FILE`
 echo "Asking to reload via http://localhost:9001/reload"
 before=$(get_owners 9003)
-curl -u demo:demo -s 'http://localhost:9001/reload' &> /dev/null
+curl -u demo:demo -4 -s 'http://localhost:9001/reload' &> /dev/null
 echo -n "Waiting"
 for i in `seq 1 6`; do
 	echo -n "...$i"
