@@ -27,7 +27,6 @@ function assert_notequal {
 	fi
 }
 
-
 mkdir -p `dirname $LOG_FILE`
 touch $LOG_FILE
 
@@ -40,11 +39,8 @@ function shepherd_start {
 
 function shepherd_stop {
 	log "Stopping shepherd..."
-	curl -u demo:demo http://localhost:9001/stop &> /dev/null
+	curl -u demo:demo http://127.0.0.1:9001/stop &> /dev/null
 	rm -f $PID_FILE $JSON_FILE $COFFEE_FILE
-	if $VERBOSE; then
-		kill %1 # kill the tail -f log_file job
-	fi
 }
 
 function kill_owner {
@@ -65,7 +61,7 @@ function check_output {
 	local port=$1
 	local owner=$(get_owners $port)
 	local expected="{\"PORT\": $port, \"PID\": \"$owner\"}"
-	local output=`curl -s http://localhost:$port/`
+	local output=`curl -s http://127.0.0.1:$port/`
 	if [ "$output" != "$expected" ]; then
 		echo "Unexpected output: '" $output "' expected: '" $expected "'"
 		shepherd_stop
