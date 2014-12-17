@@ -39,8 +39,10 @@ class Herd
 				if err then res.fail err
 				else res.pass { name: data.name, version: data.version }
 		Http.get "/tree", (req, res) ->
-			Process.findTree({ pid: process.pid }).then (tree) ->
+			Process.findTree( pid: process.pid ).then (tree) ->
 				res.pass Process.printTree(tree)
+		Http.get "/tree/json", (req, res) ->
+			Process.findTree( pid: process.pid ).then res.pass
 		Http.get "/stop", (req, res) =>
 			@stop("SIGTERM").then (->
 				res.pass "Children stopped, closing server."
@@ -55,7 +57,7 @@ class Herd
 		if r.enabled and r.url and r.channel
 			verbose "Connecting to #{r.url} channel: #{r.channel}..."
 			Rabbit.connect r.url
-			Rabbit.subscribe r.channel, { op: "status" }, (msg) ->
+			Rabbit.subscribe r.channel, { op: "get-status" }, (msg) ->
 				Process.findTree({ pid: process.pid }).then (tree) ->
 					Rabbit.publish r.channel, my { op: "status-reply", tree: tree }
 			Rabbit.subscribe r.channel, my( op: "stop" ), (msg) =>
@@ -66,13 +68,18 @@ class Herd
 
 	setStatus: (@status, args) ->
 		verbose "Changing status to:", @status
-		Rabbit.publish @opts.rabbitmq.channel, my { op: "status", status: @status, args: args }
+		Rabbit.publish @opts.rabbitmq.channel, {
+			op: "set-status"
+			status: @status
+			args: args
+			id: @shepherdId
+		}
 
 	start: (p = $.Promise()) ->
 		@setStatus "starting"
 		try return p
 		finally listen(@).then (=> # start the admin server
-			p.then (-> @setStatus "started"), ((err) -> @setStatus "failed: #{String err}")
+			p.then (=> @setStatus "started"), ((err) => @setStatus "failed: #{String err}")
 			log "Admin server listening on port:", @opts.admin.port
 			fail = (msg, err) ->
 				msg = String(msg) + String(err.stack ? err)
@@ -85,7 +92,6 @@ class Herd
 					@restart().then p.resolve, p.reject
 				), p.reject
 		), p.reject
-
 
 	stop: (signal, timeout=default_stop_timeout) ->
 		@setStatus "stopping"
@@ -161,7 +167,8 @@ class Herd
 			if owner?
 				log "Killing old listener on port (#{port}): #{owner.pid}"
 				Process.kill(owner.pid, "SIGTERM").then ->
-					$.delay listen_retry_interval, -> listen self
+					log "Will retry after #{listen_retry_interval} ms"
+					$.delay listen_retry_interval, -> listen self, p
 			else Http.listen(port).then p.resolve, p.reject
 
 	checkConflict = (servers) ->
