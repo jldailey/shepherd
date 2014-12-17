@@ -19,29 +19,31 @@ echo "
 	nginx: { enabled: false },
 	rabbitmq: {
 		enabled: true
-		url: "$AMQP_URL"
-		channel: "$AMQP_CHANNEL"
+		url: $AMQP_URL
+		channel: $AMQP_CHANNEL
 	}
 }
 " > $JSON_FILE
 PORTS="9002 9003 9004"
 
 echo "
-Rabbit = require '$FULL/src/rabbit.coffee'
+Rabbit = require '$FULL/node_modules/rabbit-pubsub'
 
-Rabbit.connect('$AMQP_URL').then ->
+Rabbit.connect('$AMQP_URL').wait (err) ->
+	if err
+		console.log 'FAIL', err
+		process.exit 1
 	count = 0
 	setTimeout (->
 		console.log 'FAIL (timeout)'
 		process.exit 1
 	), 3000
-	Rabbit.subscribe '$AMQP_CHANNEL', (msg) ->
-		if msg.op is 'pong'
-			console.log 'PASS'
-			process.exit 0
+	Rabbit.subscribe '$AMQP_CHANNEL', { op: 'status-reply' }, (msg) ->
+		console.log 'PASS'
+		process.exit 0
 	setTimeout (->
-		Rabbit.publish '$AMQP_CHANNEL', { op: 'ping' }
-	), 200
+		Rabbit.publish '$AMQP_CHANNEL', { op: 'get-status' }
+	), 500
 " > $COFFEE_FILE
 
 # this test is not concerned with starting 'over the top'
