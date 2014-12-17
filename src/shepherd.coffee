@@ -42,7 +42,6 @@ if Opts.P and Opts.daemon # write out a pid file
 verbose "Reading config file:", Opts.F
 Helpers.readJson(Opts.F).wait (err, config) ->
 	if err then die "Failed to open herd file:", Opts.F, err.stack
-	verbose "Using config:", config
 	log "Starting new herd, shepherd PID: " + process.pid
 	new Herd(config).start().wait (err) ->
 		if err then die "Failed to start herd:", err.stack ? err

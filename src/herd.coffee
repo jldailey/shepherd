@@ -206,9 +206,6 @@ Herd.defaults = (opts) ->
 		servers: []
 		workers: []
 	}, opts
-	# the above has two effects:
-	# - allows calling without arguments
-	# - ensures that the opts object can't be polluted by Object.prototype
 
 	opts.rabbitmq = $.extend Object.create(null), {
 		enabled: false
@@ -256,6 +253,6 @@ Herd.defaults = (opts) ->
 		port: 9000
 	}, opts.admin
 
-	verbose "Using configuration:", require('util').inspect(opts)
+	verbose "Using configuration:", JSON.stringify(opts, null, '  ')
 
 	return opts
