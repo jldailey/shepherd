@@ -35,7 +35,7 @@ for PORT in $PORTS; do
 	check_output $PORT
 done
 PID=`cat $PID_FILE`
-CHILDREN=`ps -eo pid,ppid,command | grep node | grep -v grep | wc -l`
+CHILDREN=`ps -eo pid,ppid,command | grep 'node\s' | grep -v grep | wc -l`
 shepherd_stop
 if [ "$CHILDREN" -ne 11 ]; then
 	echo "FAIL: Expected 9 children, got '$CHILDREN'"
