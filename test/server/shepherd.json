@@ -1,0 +1,24 @@
+{
+  "servers": [
+    {
+      "port": 9001
+      "cd": "."
+      "command": "node app.js"
+      "count": 3
+    }
+  ],
+  "workers": [
+    {
+      "cd": "."
+      "command": "node worker.js"
+      "count": 0
+    }
+  ],
+  "rabbitmq": {
+		"enabled": true
+		"url": "amqp://test:test@130.211.112.10:5672"
+		"channel": "test"
+	}
+  "nginx":    { "enabled": false }
+  "admin":    { "enabled": false }
+}

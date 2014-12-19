@@ -14,6 +14,9 @@ test: all $(PASS_FILES)
 test/%.sh.pass: test/%.sh $(JS_FILES)
 	./$< && touch $@
 
+test-serve: all
+	cd test/server && ../../bin/shepherd -v -f shepherd.json
+
 clean: clean-test
 	rm -rf lib/*
 
