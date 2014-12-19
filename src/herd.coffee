@@ -52,14 +52,17 @@ class Herd
 			@restart()
 			res.redirect 302, "/tree"
 
-		my = (o) => $.extend { id: @shepherdId }, o
+		my = (o) => $.extend { shep: @shepherdId }, o
 		r = @opts.rabbitmq
 		if r.enabled and r.url and r.channel
 			verbose "Connecting to #{r.url} channel: #{r.channel}..."
 			Rabbit.connect r.url
-			Rabbit.subscribe r.channel, { op: "get-status" }, (msg) ->
-				Process.findTree({ pid: process.pid }).then (tree) ->
-					Rabbit.publish r.channel, my { op: "status-reply", tree: tree }
+			Rabbit.subscribe r.channel, { op: "get-status" }, (msg) =>
+				log "ack receipt of get-status", msg
+				Process.findTree({ pid: process.pid }).then (tree) =>
+					reply = $.extend { shep: @shepherdId }, msg, { op: "status-reply", tree: tree }
+					Rabbit.publish r.channel, reply
+					log "replying to get-status:", reply
 			Rabbit.subscribe r.channel, my( op: "stop" ), (msg) =>
 				@stop("SIGTERM").then ->
 					$.delay stop_delay, process.exit
@@ -72,7 +75,7 @@ class Herd
 			op: "set-status"
 			status: @status
 			args: args
-			id: @shepherdId
+			shep: @shepherdId
 		}
 
 	start: (p = $.Promise()) ->
