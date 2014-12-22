@@ -1,11 +1,19 @@
 $         = require 'bling'
 Express   = require 'express'
-BasicAuth = require "basic-auth"
+BasicAuth = require 'basic-auth'
 Http      = require 'http'
+Static    = require 'serve-static'
 Helpers   = require './helpers'
-Opts      = require "./opts"
-log       = $.logger "[http]"
+Opts      = require './opts'
+log       = $.logger '[http]'
 app       = Express()
+
+app.use (req, res, next) ->
+	log req.method, req.url, "(-)"
+	next()
+
+# serve some static js files
+app.use "/static", Static __dirname + '/../static', index: false
 
 # default credentials
 http_username = Opts.username ? "demo"
@@ -25,6 +33,9 @@ plain = (next) ->
 				when "string","buffer"        then content
 				when "object","array","bling" then JSON.stringify content, null, "  "
 				else $.toRepr content
+		res.html = (content) ->
+			res.writeHead 200, { "Content-Type": "text/html" }
+			res.end String(content)
 		res.fail = (err) ->
 			res.send 500, switch $.type err
 				when "error"                  then err.stack
