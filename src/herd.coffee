@@ -1,7 +1,7 @@
 [$, Os, Fs, Handlebars, Shell, Process, { Server, Worker },
-	Http, Opts, Helpers, Rabbit, Convert] =
+	Http, Opts, Helpers, Rabbit, Convert, Jade] =
 [ 'bling', 'os', 'fs', 'handlebars', 'shelljs', './process', './child',
-	'./http', './opts', './helpers', 'rabbit-pubsub', './convert'
+	'./http', './opts', './helpers', 'rabbit-pubsub', './convert', 'jade'
 ].map require
 
 # loggers
@@ -14,6 +14,9 @@ stop_delay            = 300 # ms
 default_stop_timeout  = Convert(30).seconds.to.ms
 clean_exit_code       = 0
 dirty_exit_code       = 1
+
+renderView = (view, args) ->
+	return Jade.renderFile __dirname + "/../views/" + view, args
 
 module.exports = \
 class Herd
@@ -43,6 +46,14 @@ class Herd
 				res.pass Process.printTree(tree)
 		Http.get "/tree/json", (req, res) ->
 			Process.findTree( pid: process.pid ).then res.pass
+		Http.get "/console", (req, res) =>
+			Process.findTree( pid: process.pid ).then (tree) =>
+				try return res.html renderView("console.jade", {
+					hostname: Os.hostname()
+					opts: JSON.stringify @opts
+					tree: JSON.stringify tree
+				})
+				catch err then return res.pass String err.stack ? err
 		Http.get "/stop", (req, res) =>
 			@stop("SIGTERM").then (->
 				res.pass "Children stopped, closing server."
