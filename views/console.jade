@@ -1,0 +1,30 @@
+doctype html
+html
+	head
+		title Shepherd Console
+		script(src="/static/bling.js")
+		script.
+			html_unescape = function(text) {
+				return $.synth("div").html(text).text()[0]
+			}
+			var opts = JSON.parse(html_unescape('#{opts}')),
+				tree = JSON.parse(html_unescape('#{tree}'));
+			$(document).ready(function() {
+				$("td.opts").append($.toHTML(opts))
+				$("td.tree").append($.toHTML(tree))
+				$("table td.k").attr("valign", "top").attr("align", "right")
+			})
+	body
+		h1 Shepherd Console
+		table
+			tr
+				td.k Hostname:
+				td #{hostname}
+			tr
+				td.k Opts:
+				td(class='opts')
+			tr
+				td.k Tree:
+				td(class='tree')
+
+		
