@@ -25,7 +25,7 @@ Process.exec = (cmd, verbose) ->
 # for caching the output of 'ps' commands
 # mostly to save time in commands like Process.tree
 # where possibly hundreds of Process.find calls are generated.
-psCache = new $.Cache(2, 100)
+psCache = new $.Cache(2, 300)
 
 ps_cmd = "ps -eo uid,pid,ppid,pcpu,rss,command"
 ps_parse = (output) ->
@@ -66,6 +66,7 @@ attach_ports = (procs) ->
 				index[proc.pid] = proc
 				proc.ports = []
 			Process.exec(lsof_cmd).then (output) ->
+				unless output then return attached.resolve procs
 				try
 					for line in output.split /\n/g
 						line = line.split(/\s+/g)
