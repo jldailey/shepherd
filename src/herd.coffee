@@ -15,8 +15,17 @@ default_stop_timeout  = Convert(30).seconds.to.ms
 clean_exit_code       = 0
 dirty_exit_code       = 1
 
+viewCache = new $.Cache(Infinity, 3000)
+
 renderView = (view, args) ->
-	return Jade.renderFile __dirname + "/../views/" + view, args
+	view = __dirname + "/../views/" + view
+	if viewCache.has(view)
+		return viewCache.get(view) args
+	else
+		start = $.now
+		try return viewCache.set(view, Jade.compile Fs.readFileSync view) args
+		finally
+			$.log "reading and compiling #{view} took:", ($.now - start), "ms"
 
 module.exports = \
 class Herd
@@ -47,7 +56,9 @@ class Herd
 		Http.get "/tree/json", (req, res) ->
 			Process.findTree( pid: process.pid ).then res.pass
 		Http.get "/console", (req, res) =>
+			start = $.now
 			Process.findTree( pid: process.pid ).then (tree) =>
+				log "reading the process tree took:", ($.now - start), "ms"
 				try return res.html renderView("console.jade", {
 					hostname: Os.hostname()
 					opts: JSON.stringify @opts
