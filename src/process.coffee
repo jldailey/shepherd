@@ -25,7 +25,7 @@ Process.exec = (cmd, verbose) ->
 # for caching the output of 'ps' commands
 # mostly to save time in commands like Process.tree
 # where possibly hundreds of Process.find calls are generated.
-psCache = new $.Cache(2, 300)
+psCache = new $.Cache(2, 500)
 
 ps_cmd = "ps -eo uid,pid,ppid,pcpu,rss,command"
 ps_parse = (output) ->
@@ -43,7 +43,7 @@ ps_parse = (output) ->
 				else
 					val = row[i]
 					try # gently attempt to make numbers out of number-like strings
-						val = parseInt(val, 10)
+						val = parseFloat(val)
 						unless isFinite(val) # revert the value on a soft parsing (NaN, Infinity, etc)
 							val = row[i]
 					catch e
