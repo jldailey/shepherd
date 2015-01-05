@@ -1,4 +1,5 @@
 JS_FILES=$(shell find src -name \*.coffee | sed -e 's/src/lib/' -e 's/\.coffee/.js/')
+JS_FILES+=$(shell find static -type f -name \*.coffee | sed -e 's/\.coffee/.js/')
 PASS_FILES=$(shell ls test/*.sh | grep -v "common.sh" | sed -e 's/\.sh/.sh.pass/' )
 
 all: $(JS_FILES)
@@ -8,6 +9,10 @@ lib/%.js: src/%.coffee
 	@(o=`dirname $< | sed -e 's/src/lib/'` && \
 		mkdir -p $$o && \
 		coffee -o $$o -c $<)
+
+static/%.js: static/%.coffee
+	@echo "Compiling $<..."
+	@coffee -c $<
 
 test: all $(PASS_FILES)
 
