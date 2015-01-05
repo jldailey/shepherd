@@ -67,12 +67,26 @@ class Herd
 				catch err then return res.pass String err.stack ? err
 		Http.get "/stop", (req, res) =>
 			@stop("SIGTERM").then (->
-				res.pass "Children stopped, closing server."
+				res.redirect 302, "/console#stopping"
 				$.delay stop_delay, process.exit
 			), res.fail
 		Http.get "/reload", (req, res) =>
 			@restart()
-			res.redirect 302, "/tree"
+			res.redirect 302, "/console#reloading"
+		Http.get "/reload/:pid", (req, res) -> # restart a single child PID
+			Process.findTree( pid: process.pid ).then (tree) ->
+				# for safety, search our tree to make sure we are killing a managed PID
+				find_pid = parseInt req.params.pid, 10
+				tree.children?.forEach visit = (node) ->
+					console.log "visiting", node.pid, "vs", find_pid
+					if node.pid is find_pid
+						console.log "killing", node.pid
+						Process.kill(node.pid).then (->
+							console.log "done, redirecting..."
+							res.redirect 302, "/console#killed-#{node.pid}"
+						), res.fail
+					else node.children?.forEach visit
+
 
 		my = (o) => $.extend { shep: @shepherdId }, o
 		r = @opts.rabbitmq
@@ -104,6 +118,7 @@ class Herd
 		@setStatus "starting"
 		try return p
 		finally listen(@).then (=> # start the admin server
+			# TODO: respect an admin.enabled=false configuration
 			p.then (=> @setStatus "started"), ((err) => @setStatus "failed: #{String err}")
 			log "Admin server listening on port:", @opts.admin.port
 			fail = (msg, err) ->
@@ -191,7 +206,7 @@ class Herd
 		finally Process.clearCache().findOne({ ports: port }).then (owner) ->
 			if owner?
 				log "Killing old listener on port (#{port}): #{owner.pid}"
-				Process.kill(owner.pid, "SIGTERM").then ->
+				Process.kill(owner.pid, "SIGTERM").wait ->
 					log "Will retry after #{listen_retry_interval} ms"
 					$.delay listen_retry_interval, -> listen self, p
 			else Http.listen(port).then p.resolve, p.reject
@@ -199,12 +214,11 @@ class Herd
 	checkConflict = (servers) ->
 		ranges = ([server.port, server.port + server.count - 1] for server in servers)
 		for a in ranges
-			for b in ranges
-				switch true
-					when a is b then continue
-					when a[0] <= b[0] <= a[1] or a[0] <= b[1] <= a[1]
-						verbose "Conflict in port ranges:", a, b
-						return true
+			for b in ranges then switch true
+				when a is b then continue
+				when a[0] <= b[0] <= a[1] or a[0] <= b[1] <= a[1]
+					verbose "Conflict in port ranges:", a, b
+					return true
 		false
 
 	connectSignals = (self) ->
