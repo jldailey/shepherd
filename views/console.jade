@@ -5,28 +5,35 @@ html
 		meta(charset="utf-8")
 		script(src="/static/bling.js")
 		script.
-			var opts = JSON.parse('!{opts}'),
-				tree = JSON.parse('!{tree}');
+			window.opts = JSON.parse('!{opts}');
+			window.tree = JSON.parse('!{tree}');
 			$(document).ready(function() {
-				var start = $.now
-				$("td.opts").append($.toHTML(opts))
-				console.log("rendering opts:", ($.now - start), "ms")
-				start = $.now
-				$("td.tree").append($.toHTML(tree))
-				console.log("rendering tree:", ($.now - start), "ms")
-				// $("table td.k").attr("valign", "top").attr("align", "right")
+				$("td.opts").append($.toHTML(window.opts, false))
+				$("td.tree").append($.toHTML(window.tree, false))
 			})
+		script(src="/static/index.js")
+		style.
+			a:visited { color: blue; }
+			table.tree td { text-align: center; }
+			table.tree { width: 100%; }
 	body
 		h1 Shepherd Console
-		table
+		a(href="/reload") Restart Everything
+		table(border=1)
 			tr
-				td.k Hostname:
+				td.k(valign='top',align='right') Hostname:
 				td #{hostname}
 			tr
-				td.k(valign='top',align='right') Opts:
+				td.k(valign='top',align='right') Configuration:
 				td(class='opts')
 			tr
-				td.k(valign='top',align='right') Tree:
+				td.k(valign='top',align='right') Process Tree:
 				td(class='tree')
-
-		
+			tr
+				td.k(valign='top',align='right') Servers:
+				td.servers
+					a(href="/servers/restart") Restart Servers
+			tr
+				td.k(valign='top',align='right') Workers:
+				td.workers
+					a(href="/workers/restart") Restart Workers
