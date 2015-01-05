@@ -11,7 +11,7 @@
     {
       "cd": "."
       "command": "node worker.js"
-      "count": 0
+      "count": 2
     }
   ],
   "rabbitmq": {
