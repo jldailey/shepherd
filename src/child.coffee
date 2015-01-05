@@ -149,7 +149,7 @@ class Worker extends Child
 	Http.get "/workers/restart", (req, res) ->
 		for worker in workers
 			worker.restart()
-		res.redirect 302, "/workers?restarting"
+		res.redirect 302, "/console#restarting-workers"
 	workers = []
 
 	constructor: (opts, index) ->
@@ -174,7 +174,7 @@ class Server extends Child
 		res.pass ret + "]"
 	Http.get "/servers/restart", (req, res) ->
 		$.valuesOf(servers).flatten().select('restart').call()
-		res.redirect 302, "/servers?restarting"
+		res.redirect 302, "/console#restarting-servers"
 
 	# a map of base port to all Server instances based on that port
 	servers = {}
