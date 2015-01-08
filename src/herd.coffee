@@ -59,6 +59,18 @@ class Herd
 			start = $.now
 			Process.findTree( pid: process.pid ).then (tree) =>
 				log "reading the process tree took:", ($.now - start), "ms"
+				uptimes = Object.create null
+				for child in @children
+					$.log "Uptime:", child.process.pid, uptimes[child.process.pid] = child.uptimeString()
+				visit = (node, parent) ->
+					if node.pid of uptimes
+						node.uptime = uptimes[node.pid]
+					else if parent
+						node.uptime = parent.uptime
+					for child in node.children
+						visit child, node
+					null
+				visit(tree)
 				try return res.html renderView("console.jade", {
 					hostname: Os.hostname()
 					opts: JSON.stringify @opts
