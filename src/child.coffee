@@ -24,6 +24,18 @@ class Child
 		@log.verbose = =>
 			try if Opts.verbose then @log.apply null, arguments
 			catch err then @log "verbose error:", err.stack ? err
+		@started.then =>
+			@last_start = $.now
+
+	uptime: ->
+		return if @last_start then $.now - @last_start else 0
+	uptimeString: ->
+		$( hours = @uptime() / 3600000,
+			 minutes = (hours % 1) * 60,
+			 seconds = (minutes % 1) * 60
+		)
+		.map(-> $.padLeft String(Math.floor @), 2, "0")
+		.join(":")
 
 	start: ->
 		try return @started
@@ -58,7 +70,7 @@ class Child
 			else p.resolve()
 
 	restart: ->
-		try return p = $.Promise()
+		try return p = $.Promise().then => @last_start = $.now
 		finally unless @process?
 			log "Starting fresh child (no existing process)"
 			@start().then p.resolve, p.reject
