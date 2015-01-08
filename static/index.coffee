@@ -5,10 +5,11 @@ $(document).ready ->
 		unless table
 			table = $.synth "table.tree"
 			table.append $.synth "tr th 'Port(s)' " +
-				"+ th 'PID' + th 'Command' + th 'RAM' + th 'CPU' + th 'Action'"
+				"+ th 'PID' + th 'Uptime' + th 'Command' + th 'RAM' + th 'CPU' + th 'Action'"
 		if process.ports.length > 0 and not (this_port in process.ports)
+			console.log "server:", process
 			row = $.synth "tr.proc td '#{process.ports.join(",")}' " +
-				"+ td '#{process.pid}' + td '#{process.command}' " +
+				"+ td '#{process.pid}' + td '#{process.uptime}' + td '#{process.command}' " +
 				"+ td '#{$.commaize process.rss} kb' + td[align=center] '#{process.cpu.toFixed(2)} %' " +
 				"+ td a[href=/reload/#{process.pid}] 'Restart'"
 			table.append row
@@ -22,9 +23,11 @@ $(document).ready ->
 		unless table
 			table = $.synth "table.tree"
 			table.append $.synth "tr " +
-				"+ th 'PID' + th 'Command' + th 'RAM' + th 'CPU' + th 'Action'"
+				"+ th 'PID' + th 'Uptime' + th 'Command' + th 'RAM' + th 'CPU' + th 'Action'"
 		if process.ports.length is 0 and process.children.length is 0 and (process.command.indexOf("ps -eo uid,") is -1)
+			console.log "worker:", process
 			row = $.synth "tr.proc td '#{process.pid}' " +
+				"+ td '#{process.uptime}' " +
 				"+ td '#{process.command}' + td '#{$.commaize process.rss} kb' " +
 				"+ td[align=center] '#{process.cpu.toFixed 2} %' " +
 				"+ td a[href=/reload/#{process.pid}] 'Restart'"
