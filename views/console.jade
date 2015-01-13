@@ -17,9 +17,9 @@ html
 			table.tree td { text-align: center; }
 			table.tree { width: 100%; }
 	body
-		h1 Shepherd Console
-		a(href="/reload") Restart Everything
 		table(border=1)
+			tr
+				th(align=center,colspan=2) Shepherd Console
 			tr
 				td.k(valign='top',align='right') Hostname:
 				td #{hostname}
@@ -37,3 +37,6 @@ html
 				td.k(valign='top',align='right') Workers:
 				td.workers
 					a(href="/workers/restart") Restart Workers
+			tr
+				td(colspan=2)
+					a(href="/reload") Restart Everything
