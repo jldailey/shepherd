@@ -14,18 +14,16 @@ stop_delay            = 300 # ms
 default_stop_timeout  = Convert(30).seconds.to.ms
 clean_exit_code       = 0
 dirty_exit_code       = 1
+view_cache_timeout    = 3000
+if $.config("NODE_ENV") is "production"
+	view_cache_timeout  = 60000
 
-viewCache = new $.Cache(Infinity, 3000)
+viewCache = new $.Cache Infinity, view_cache_timeout
 
 renderView = (view, args) ->
 	view = __dirname + "/../views/" + view
-	if viewCache.has(view)
-		return viewCache.get(view) args
-	else
-		start = $.now
-		try return viewCache.set(view, Jade.compile Fs.readFileSync view) args
-		finally
-			$.log "reading and compiling #{view} took:", ($.now - start), "ms"
+	return if viewCache.has(view) then viewCache.get(view) args
+	else viewCache.set(view, Jade.compile Fs.readFileSync view) args
 
 module.exports = \
 class Herd
@@ -61,7 +59,7 @@ class Herd
 				log "reading the process tree took:", ($.now - start), "ms"
 				uptimes = Object.create null
 				for child in @children
-					$.log "Uptime:", child.process.pid, uptimes[child.process.pid] = child.uptimeString()
+					uptimes[child.process.pid] = child.uptimeString()
 				visit = (node, parent) ->
 					if node.pid of uptimes
 						node.uptime = uptimes[node.pid]
