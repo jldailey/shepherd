@@ -2,6 +2,7 @@ $       = require 'bling'
 Os      = require "os"
 Shell   = require 'shelljs'
 Handlebars = require "handlebars"
+Health  = require './health'
 Process = require './process'
 Helpers = require './helpers'
 Http    = require './http'
@@ -202,6 +203,8 @@ class Server extends Child
 
 	# wrap the default start function
 	start: ->
+		@started.then =>
+			Health.monitor @port, @process.pid, @opts.check
 		try return @started
 		finally
 			# find any process that is listening on our port
@@ -229,6 +232,14 @@ class Server extends Child
 			poolName: "shepherd_pool"
 		}, Child.defaults opts
 		opts.port = parseInt opts.port, 10
-		opts
+		opts.check = $.extend {
+			enabled: false
+			url: "/"
+			status: 200
+			contains: null
+			timeout: 3000
+			interval: 10000
+		}, opts.check
+		return opts
 
 $.extend module.exports, { Server, Worker }
