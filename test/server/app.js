@@ -28,14 +28,12 @@ $.delay(500, function() { // add an artificial startup delay
 		requestCount += 1;
 		switch(req.url) {
 			case "/health-check":
-				switch( requestCount % 6 ) {
-					// answer 4 OK in a row, then a NOT OK, then a timeout
-					case 0: return; // timeout
+				switch( requestCount % 5 ) {
+					case 0:
 					case 1:
-					case 2:
-					case 3: // fall through
-					case 4: finish("IM OK"); break;
-					case 5: fail("NOT OK"); break;
+					case 2: // fall through
+					case 3: finish("IM OK"); break;
+					case 4: $.random.element([function(){fail("NOT OK")}, function(){ console.log("TIMING OUT") }])()
 				}
 				break;
 			default:
