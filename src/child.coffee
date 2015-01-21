@@ -171,7 +171,10 @@ class Worker extends Child
 			index
 		]
 		workers.push @
-		@log = $.logger @toString()
+		@log = if opts.prefix
+			$.logger "#{@opts.prefix}[#{@index}]"
+		else
+			$.logger @toString()
 
 	start: ->
 		super()
@@ -198,7 +201,7 @@ class Server extends Child
 			index
 		]
 		@port = opts.port + index
-		@log = $.logger "(#{@opts.cd}):#{@port}"
+		@log = $.logger "(#{@opts.prefix or @opts.cd}:#{@port})"
 		(servers[opts.port] ?= []).push @
 
 	# wrap the default start function

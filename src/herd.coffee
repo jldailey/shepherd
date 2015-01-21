@@ -137,7 +137,7 @@ class Herd
 				p.reject msg
 			if checkConflict @opts.servers then fail "port range conflict"
 			else
-				writeConfig(@).then ((msg) => # write the dynamic configuration
+				writeNginxConfig(@).then ((msg) => # write the dynamic configuration
 					verbose msg
 					@restart().then p.resolve, p.reject
 				), p.reject
@@ -192,7 +192,7 @@ class Herd
 		s
 
 	# write the nginx config to a file
-	writeConfig = (self) ->
+	writeNginxConfig = (self) ->
 		nginx = self.opts.nginx
 		try return p = $.Promise()
 		finally if (not nginx.enabled) or (not nginx.config)
@@ -206,7 +206,7 @@ class Herd
 					else Process.exec(nginx.reload).wait (err) ->
 						if err then fail "Failed to reload nginx:", err
 						else p.resolve("Nginx configuration written.")
-			catch err then fail "writeConfig exception:", err
+			catch err then fail "writeNginxConfig exception:", err
 
 	listen = (self, p = $.Promise()) ->
 		port = self.opts.admin.port

@@ -5,6 +5,7 @@
       "cd": "."
       "command": "node app.js"
       "count": 3
+			"prefix": "my custom prefix"
 			"check": {
 				"enabled": true
 				"url": "/health-check"
@@ -18,6 +19,7 @@
   "workers": [
     {
       "cd": "."
+			"prefix": "_worker_"
       "command": "node worker.js"
       "count": 2
     }
