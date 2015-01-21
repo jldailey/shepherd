@@ -3,12 +3,6 @@ Logging per block of servers
 	- so the API would log to one file, the admin to another, the workers to another.
 	- done in the JSON
 
-Logging prefix specified in the JSON
-	- so "[server:8001]" or "[worker:8001]" is just the default
-	- "prefix": "admin" would produce "[admin:8005]" in the log file.
-
-Uptime, per-process, and global.
-
 Someday: git status, per each exec-y thing.
 	- for everything with a "cd": key, do "cd ... && git status"
 
