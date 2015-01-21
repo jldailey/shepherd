@@ -61,20 +61,22 @@ class Herd
 				for child in @children
 					uptimes[child.process.pid] = child.uptimeString()
 				visit = (node, parent) ->
-					if node.pid of uptimes
-						node.uptime = uptimes[node.pid]
-					else if parent
-						node.uptime = parent.uptime
+					node.uptime = uptimes[node.pid] ? parent?.uptime
 					for child in node.children
 						visit child, node
 					null
 				visit(tree)
-				try return res.html renderView("console.jade", {
-					hostname: Os.hostname()
-					opts: JSON.stringify @opts
-					tree: JSON.stringify tree
-				})
-				catch err then return res.pass String err.stack ? err
+				$.Promise.collect( $(@opts.servers).concat(@opts.workers).map (proc) ->
+					Process.exec("cd #{proc.cd} && git log -1 --pretty=format:'%d %h - %f - %ar'").then (result) ->
+						proc.status = result
+				).then (status) =>
+					try return res.html renderView("console.jade", {
+						hostname: Os.hostname()
+						opts: JSON.stringify @opts
+						tree: JSON.stringify tree
+						status: JSON.stringify status
+					})
+					catch err then return res.pass String err.stack ? err
 		Http.get "/stop", (req, res) =>
 			@stop("SIGTERM").then (->
 				res.redirect 302, "/console#stopping"
