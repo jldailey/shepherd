@@ -2,7 +2,3 @@
 Logging per block of servers
 	- so the API would log to one file, the admin to another, the workers to another.
 	- done in the JSON
-
-Someday: git status, per each exec-y thing.
-	- for everything with a "cd": key, do "cd ... && git status"
-
