@@ -182,6 +182,7 @@ Process.killTree = (proc, signal) ->
 					Process.walk tree, (node) ->
 						if node.pid then tokill.push node.pid
 						else fail "killTree invalid node (no pid):", node
+						null
 					if tokill.length
 						Process.exec("kill -#{signal} #{tokill.join ' '} &> /dev/null")
 							.then p.resolve, (err) ->
