@@ -10,7 +10,7 @@ Opts    = require './opts'
 log = $.logger "[child]"
 verbose = ->
 	try if Opts.verbose then log.apply null, arguments
-	catch err then log "verbose error:", err.stack ? err
+	catch err then log "verbose error:", $.debugStack err
 
 class Child
 	constructor: (opts, index) ->
@@ -24,7 +24,7 @@ class Child
 		@log = $.logger @toString()
 		@log.verbose = =>
 			try if Opts.verbose then @log.apply null, arguments
-			catch err then @log "verbose error:", err.stack ? err
+			catch err then @log "verbose error:", $.debugStack err
 		@started.then =>
 			@last_start = $.now
 
@@ -67,7 +67,7 @@ class Child
 			if @process
 				try Process.killTree(@process.pid, signal).then p.resolve, p.reject
 				catch err
-					log "Error calling killTree:", err.stack ? err
+					log "Error calling killTree:", $.debugStack err
 			else p.resolve()
 
 	restart: ->
@@ -84,7 +84,7 @@ class Child
 					@started.attempts = 0
 					@start().then p.resolve, p.reject
 				catch err
-					log "restart error:", err.stack ? err
+					log "restart error:", $.debugStack err
 					p.reject err
 			log "Killing existing process", @process.pid
 			@expectedExit = true
@@ -97,7 +97,7 @@ class Child
 					else if err then p.reject err
 					else restart()
 				catch err
-					log "restart error during kill tree:", err.stack ? err
+					log "restart error during kill tree:", $.debugStack err
 					p.reject err
 
 	onExit: (code, signal) ->
@@ -107,16 +107,16 @@ class Child
 			@restart() unless @expectedExit
 			@expectedExit = false
 		catch err
-			@log "child.onExit error:", err.stack ? err
+			@log "child.onExit error:", $.debugStack err
 
 	toString: toString = ->
 		try return "#{@constructor.name}[#{@index}]"
-		catch err then log "toString error:", err.stack ? err
+		catch err then log "toString error:", $.debugStack err
 	inspect:  toString
 
 	env: ->
 		try return ("#{key}=\"#{val}\"" for key,val of @opts.env when val?).join " "
-		catch err then log "env error:", err.stack ? err
+		catch err then log "env error:", $.debugStack err
 
 	Child.defaults = (opts) ->
 		opts = $.extend Object.create(null), {

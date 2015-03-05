@@ -16,11 +16,11 @@ Process.exec = (cmd, verbose) ->
 					if exitCode isnt 0 then p.reject ret.output
 					else p.resolve ret.output
 				catch err
-					log "exec: error handling process exit:", err.stack ? err
+					log "exec: error handling process exit:", $.debugStack err
 			child.stdout.on "data", append_output = (data) -> ret.output += String data
 			child.stderr.on "data", append_output
 		catch err
-			log "exec: error in running process:", err.stack ? err
+			log "exec: error in running process:", $.debugStack err
 
 # for caching the output of 'ps' commands
 # mostly to save time in commands like Process.tree
@@ -53,7 +53,7 @@ ps_parse = (output) ->
 				unless ret[key]?
 					log "ps_parse failed to parse line:", key, i, row[i], ret[key]
 	catch err
-		log "ps_parse error:", err.stack ? err
+		log "ps_parse error:", $.debugStack err
 
 # given the output of ps_parse, use "lsof" to attach listening ports
 lsof_cmd = "lsof -Pni | grep LISTEN"
@@ -81,9 +81,9 @@ attach_ports = (procs) ->
 							log err, pid, index[pid]
 					attached.resolve(procs)
 				catch err
-					log "attach_ports error while parsing output:", err.stack ? err
+					log "attach_ports error while parsing output:", $.debugStack err
 		catch err
-			log "attach_ports error:", err.stack ? err
+			log "attach_ports error:", $.debugStack err
 
 Process.clearCache = -> psCache.del ps_cmd; Process
 
@@ -103,17 +103,17 @@ Process.find = (query) ->
 					try
 						p.resolve psCache.set(ps_cmd, procs).filter (item) -> $.matches query, item
 					catch err
-						log "find error in results:", err.stack ? err
+						log "find error in results:", $.debugStack err
 				), p.reject
 			), p.reject
 		catch err
-			log "find error:", err.stack ? err
+			log "find error:", $.debugStack err
 
 Process.findOne = (query) ->
 	try return p = $.Promise()
 	finally Process.find(query).then ((out) ->
 		try p.resolve out[0]
-		catch err then log "findOne error:", err.stack ? err
+		catch err then log "findOne error:", $.debugStack err
 	), p.reject
 
 Process.findTree = (query) ->
@@ -137,7 +137,7 @@ Process.getSignalNumber = (signal) ->
 
 Process.kill = (pid, signal) ->
 	try Process.exec "kill -#{Process.getSignalNumber signal} #{pid}"
-	catch err then log "kill error:", err.stack ? err
+	catch err then log "kill error:", $.debugStack err
 
 Process.tree = (proc) ->
 	try return q = $.Promise()
@@ -150,7 +150,7 @@ Process.tree = (proc) ->
 					p.include Process.tree child
 				p.resolve(1, proc)
 			catch err
-				log "tree error:", err.stack ? err
+				log "tree error:", $.debugStack err
 		), q.reject
 		p.then (-> q.resolve proc), q.reject
 
@@ -159,7 +159,7 @@ Process.walk = (node, visit, depth=0) ->
 	finally
 		try p.include visit node, depth
 		catch err
-			log "walk error (in visit):", err.stack ? err
+			log "walk error (in visit):", $.debugStack err
 			p.reject err
 		for child in node.children
 			p.include Process.walk child, visit, depth + 1
@@ -175,7 +175,7 @@ Process.killTree = (proc, signal) ->
 				else proc
 			tokill = []
 			fail = (msg, err) ->
-				log msg, err?.stack ? err
+				log msg, $.debugStack err
 				p.reject err
 			Process.tree(proc).then ((tree) ->
 				try
@@ -212,7 +212,7 @@ Process.printTree = (proc, indent, spacer) ->
 		indent.replace /^   /,''
 		return ret
 	catch err
-		log "printTree error:", err.stack ? err
+		log "printTree error:", $.debugStack err
 
 if require.main is module
 	port = parseInt(process.argv[2], 10) || 8000

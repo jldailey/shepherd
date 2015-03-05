@@ -76,7 +76,7 @@ class Herd
 						tree: JSON.stringify tree
 						status: JSON.stringify status
 					})
-					catch err then return res.pass String err.stack ? err
+					catch err then return res.pass $.debugStack err
 		Http.get "/stop", (req, res) =>
 			@stop("SIGTERM").then (->
 				res.redirect 302, "/console#stopping"
@@ -134,7 +134,7 @@ class Herd
 			p.then (=> @setStatus "started"), ((err) => @setStatus "failed: #{String err}")
 			log "Admin server listening on port:", @opts.admin.port
 			fail = (msg, err) ->
-				msg = String(msg) + String(err.stack ? err)
+				msg = String(msg) + $.debugStack err
 				verbose msg
 				p.reject msg
 			if checkConflict @opts.servers then fail "port range conflict"
@@ -154,7 +154,7 @@ class Herd
 				verbose "Attempting to stop child:", child.process.pid, signal
 				try p.include child.stop signal
 				catch err
-					log "Error stopping child:", err.stack ? err
+					log "Error stopping child:", $.debugStack err
 					p.reject err
 			holder = setTimeout (->
 				log "Failed to stop children within #{timeout} seconds."
@@ -164,7 +164,7 @@ class Herd
 				@setStatus "stopped"
 				clearTimeout holder
 			), (err) ->
-				@setStatus "failed to stop", err?.stack ? err
+				@setStatus "failed to stop", String(err)
 
 	restart: (from = 0, done = $.Promise()) -> # perform a careful rolling restart
 		if from is 0 then verbose "Rolling restart starting..."
@@ -200,7 +200,7 @@ class Herd
 		finally if (not nginx.enabled) or (not nginx.config)
 			p.resolve("Nginx configuration not enabled.")
 		else
-			fail = (msg, err) -> p.reject(msg + (err.stack ? err))
+			fail = (msg, err) -> p.reject(msg + ($.debugStack err))
 			try
 				verbose "Writing nginx configuration to file:", nginx.config
 				Fs.writeFile nginx.config, buildNginxConfig(self), (err) ->
@@ -213,7 +213,7 @@ class Herd
 	listen = (self, p = $.Promise()) ->
 		port = self.opts.admin.port
 		p.then $.identity, (err) ->
-			self.setStatus "listen failed: #{ err?.stack ? err }"
+			self.setStatus "listen failed: #{ String(err) }"
 		try return p
 		finally Process.clearCache().findOne({ ports: port }).then (owner) ->
 			if owner?

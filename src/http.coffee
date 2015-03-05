@@ -38,7 +38,7 @@ plain = (next) ->
 			res.end String(content)
 		res.fail = (err) ->
 			res.send 500, switch $.type err
-				when "error"                  then err.stack
+				when "error"                  then $.debugStack err
 				when "string","buffer"        then err
 				when "object","array","bling" then JSON.stringify err
 				else $.toRepr content

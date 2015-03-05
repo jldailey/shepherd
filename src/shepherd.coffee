@@ -13,14 +13,14 @@ verbose = ->
 
 if Opts.O is "-"
 	try outStr = process.stdout
-	catch err then die "Failed to open stdout:", err.stack
+	catch err then die "Failed to open stdout:", $.debugStack err
 else
 	try outStr = Fs.createWriteStream Opts.O, { flags: 'a', mode: 0o666, encoding: 'utf8' }
-	catch err then die "Failed to open output stream:", err.stack
+	catch err then die "Failed to open output stream:", $.debugStack err
 
 $.log.out = (a...) ->
 	try outStr.write a.map($.toString).join(' ') + "\n", 'utf8'
-	catch err then die "Failed to write to log:", err.stack
+	catch err then die "Failed to write to log:", $.debugStack err
 
 verbose "Opened output stream."
 
@@ -41,8 +41,8 @@ if Opts.P and Opts.daemon # write out a pid file
 
 verbose "Reading config file:", Opts.F
 Helpers.readJson(Opts.F).wait (err, config) ->
-	if err then die "Failed to open herd file:", Opts.F, err.stack
+	if err then die "Failed to open herd file:", Opts.F, $.debugStack err
 	log "Starting new herd, shepherd PID: " + process.pid
 	new Herd(config).start().wait (err) ->
-		if err then die "Failed to start herd:", err.stack ? err
+		if err then die "Failed to start herd:", $.debugStack err
 
