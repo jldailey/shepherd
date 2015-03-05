@@ -88,9 +88,9 @@ class Child
 					p.reject err
 			log "Killing existing process", @process.pid
 			@expectedExit = true
-			Process.killTree(@process.pid, "SIGTERM").wait @opts.restart.gracePeriod, (err) ->
+			Process.killTree(@process.pid, "SIGTERM").wait @opts.restart.gracePeriod, (err) =>
 				try
-					if err is "timeout"
+					if String(err) is "Error: timeout"
 						log "Child failed to die within #{@opts.restart.gracePeriod}ms, using SIGKILL"
 						Process.killTree(@process.pid, "SIGKILL")
 							.then restart, p.reject
