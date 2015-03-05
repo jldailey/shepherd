@@ -679,6 +679,40 @@ $.plugin
 	dateFormat: (fmt = $.date.defaultFormat, unit = $.date.defaultUnit) -> @map(-> $.date.format @, fmt, unit)
 	dateParse: (fmt = $.date.defaultFormat, unit = $.date.defaultUnit) -> @map(-> $.date.parse @, fmt, unit)
 $.plugin
+	provides: "debug, debugStack",
+	depends: "core"
+, ->
+	explodeStack = (stack) ->
+		fs = null
+		try fs = require 'fs'
+		catch err then return stack # if we aren't in node, reading files is meaningless
+		lines = $(String(stack).split(/(?:\r\n|\r|\n)/)).filter(/^$/, false)
+		message = lines.first()
+		lines = lines.skip 1
+		files = lines.map (s) ->
+			f = s.replace(/^\s*at\s+/,'')
+				.replace(/^[^(]*\(/,'(')
+				.replace(/^\(/,'')
+				.replace(/\)$/,'')
+			try
+				[f,ln_num,col] = f.split(/:/)
+				data = String(fs.readFileSync f)
+				f_lines = data.split(/(?:\r\n|\r|\n)/)
+				line = f_lines[ln_num-1]
+				tabs = line.replace(/[^\t]/g,'').length
+				spacer = $.repeat('\t', tabs) + $.repeat(' ', (col-1)-tabs)
+				return """  #{ln_num} #{line}\n  #{ln_num} #{spacer}^"""
+			catch err
+				return "  " + String(err).replace(/\n/,'')
+		return message + "\n" + $.weave(files, lines).join "\n"
+	return $: {
+		debugStack: (error) ->
+			explodeStack switch true
+				when $.is 'error', error then String(error.stack)
+				when $.is 'string', error then error
+				else String(error)
+	}
+$.plugin
 	provides: "delay,immediate,interval"
 	depends: "is,select,extend,bound"
 , ->
@@ -1480,7 +1514,7 @@ $.plugin
 	tableRow = (k, v, open) ->
 		row = $.synth "tr.kv td.k[align=right][valign=top] '#{k}' + td.v"
 		td = row.find "td.v"
-		switch _t = $.type v = $.toHTML v
+		switch _t = $.type v = $.toHTML v, open
 			when "string","number","bool","html","null","undefined" then td.appendText String v
 			else td.append v
 		td.addClass _t
@@ -1749,23 +1783,27 @@ $.plugin
 			cb.timeout?.cancel()
 			try cb e, v
 			catch _e
+				_stack = $.debugStack _e
+				$.log "Promise(#{ret.promiseId}) first-chance exception:", _stack
 				try cb _e, null
 				catch __e
-					$.log "Fatal error in promise callback:", \
-						__e?.stack ? __e, "caused by:", _e?.stack ? _e
+					__stack = $.debugStack __e
+					$.log "Promise(#{ret.promiseId}) last-chance exception:", __stack
 			null
 		end = (error, value) =>
 			if err is result is NoValue
 				if error isnt NoValue
 					err = error
+					unless error?.stack # force all errors to capture the current stack
+						err = new Error error
 				else if value isnt NoValue
 					result = value
-				switch
+				switch true
 					when value is @
 						return end new TypeError "cant resolve a promise with itself"
 					when $.is 'promise', value then value.wait end
-					when error isnt NoValue then consume_all error, null
-					when value isnt NoValue then consume_all null, value
+					when error isnt NoValue then consume_all err, null
+					when value isnt NoValue then consume_all null, result
 			return @
 		ret = $.inherit {
 			promiseId: $.random.string 6
@@ -1782,12 +1820,10 @@ $.plugin
 						cb.timeout = $.delay timeout, ->
 							if (i = waiting.indexOf cb) > -1
 								waiting.splice i, 1
-								consume_one cb, err = 'timeout', undefined
+								consume_one cb, err = new Error('timeout'), undefined
 				@
 			then: (f, e) -> @wait (err, x) ->
-				if err
-					if e? then e(err)
-					else throw err
+				if err then e?(err)
 				else f(x)
 			finish:  (value) -> end NoValue, value; @
 			resolve: (value) -> end NoValue, value; @
@@ -2633,7 +2669,7 @@ $.plugin
 				ret[j++] = rest
 			return ret
 		compile.cache = {}
-		render = (text, values) -> # replace markers in /text/ with /values/
+		return render = (text, values) -> # replace markers in /text/ with /values/
 			cache = compile.cache[text] # get the cached version
 			if not cache?
 				cache = compile.cache[text] = compile(text) # or compile and cache it
@@ -2658,19 +2694,6 @@ $.plugin
 					output[j] = String.PadLeft output[j], pad
 				output[j++] = rest
 			output.join ""
-		return render
-	template.register_engine 'js-eval', do -> # work in progress...
-		class TemplateMachine extends $.StateMachine
-			@STATE_TABLE = [
-				{ # 0: START
-					enter: () ->
-						@data = []
-						@GO(1)
-				},
-				{ # 1: read anything
-				}
-			]
-		return $.identity
 	return $: { template }
 $.plugin
 	provides: "throttle"

@@ -1584,6 +1584,59 @@
   });
 
   $.plugin({
+    provides: "debug, debugStack",
+    depends: "core"
+  }, function() {
+    var explodeStack;
+    explodeStack = function(stack) {
+      var err, files, fs, lines, message;
+      fs = null;
+      try {
+        fs = require('fs');
+      } catch (_error) {
+        err = _error;
+        return stack;
+      }
+      lines = $(String(stack).split(/(?:\r\n|\r|\n)/)).filter(/^$/, false);
+      message = lines.first();
+      lines = lines.skip(1);
+      files = lines.map(function(s) {
+        var col, data, f, f_lines, line, ln_num, spacer, tabs, _ref;
+        f = s.replace(/^\s*at\s+/, '').replace(/^[^(]*\(/, '(').replace(/^\(/, '').replace(/\)$/, '');
+        try {
+          _ref = f.split(/:/), f = _ref[0], ln_num = _ref[1], col = _ref[2];
+          data = String(fs.readFileSync(f));
+          f_lines = data.split(/(?:\r\n|\r|\n)/);
+          line = f_lines[ln_num - 1];
+          tabs = line.replace(/[^\t]/g, '').length;
+          spacer = $.repeat('\t', tabs) + $.repeat(' ', (col - 1) - tabs);
+          return "  " + ln_num + " " + line + "\n  " + ln_num + " " + spacer + "^";
+        } catch (_error) {
+          err = _error;
+          return "  " + String(err).replace(/\n/, '');
+        }
+      });
+      return message + "\n" + $.weave(files, lines).join("\n");
+    };
+    return {
+      $: {
+        debugStack: function(error) {
+          return explodeStack((function() {
+            switch (true) {
+              case $.is('error', error):
+                return String(error.stack);
+              case $.is('string', error):
+                return error;
+              default:
+                return String(error);
+            }
+          })());
+        }
+      }
+    };
+  });
+
+  $.plugin({
     provides: "delay,immediate,interval",
     depends: "is,select,extend,bound"
   }, function() {
@@ -3230,7 +3283,7 @@
       var row, td, _t;
       row = $.synth("tr.kv td.k[align=right][valign=top] '" + k + "' + td.v");
       td = row.find("td.v");
-      switch (_t = $.type(v = $.toHTML(v))) {
+      switch (_t = $.type(v = $.toHTML(v, open))) {
         case "string":
         case "number":
         case "bool":
@@ -3940,7 +3993,7 @@
         return null;
       };
       consume_one = function(cb, e, v) {
-        var __e, _e, _ref, _ref1, _ref2;
+        var __e, __stack, _e, _ref, _stack;
         if ((_ref = cb.timeout) != null) {
           _ref.cancel();
         }
@@ -3948,11 +4001,14 @@
           cb(e, v);
         } catch (_error) {
           _e = _error;
+          _stack = $.debugStack(_e);
+          $.log("Promise(" + ret.promiseId + ") first-chance exception:", _stack);
           try {
             cb(_e, null);
           } catch (_error) {
             __e = _error;
-            $.log("Fatal error in promise callback:", (_ref1 = __e != null ? __e.stack : void 0) != null ? _ref1 : __e, "caused by:", (_ref2 = _e != null ? _e.stack : void 0) != null ? _ref2 : _e);
+            __stack = $.debugStack(__e);
+            $.log("Promise(" + ret.promiseId + ") last-chance exception:", __stack);
           }
         }
         return null;
@@ -3962,20 +4018,23 @@
           if ((err === result && result === NoValue)) {
             if (error !== NoValue) {
               err = error;
+              if (!(error != null ? error.stack : void 0)) {
+                err = new Error(error);
+              }
             } else if (value !== NoValue) {
               result = value;
             }
-            switch (false) {
-              case value !== _this:
+            switch (true) {
+              case value === _this:
                 return end(new TypeError("cant resolve a promise with itself"));
-              case !$.is('promise', value):
+              case $.is('promise', value):
                 value.wait(end);
                 break;
-              case error === NoValue:
-                consume_all(error, null);
+              case error !== NoValue:
+                consume_all(err, null);
                 break;
-              case value === NoValue:
-                consume_all(null, value);
+              case value !== NoValue:
+                consume_all(null, result);
             }
           }
           return _this;
@@ -4003,7 +4062,7 @@
                 var i;
                 if ((i = waiting.indexOf(cb)) > -1) {
                   waiting.splice(i, 1);
-                  return consume_one(cb, err = 'timeout', void 0);
+                  return consume_one(cb, err = new Error('timeout'), void 0);
                 }
               });
             }
@@ -4013,11 +4072,7 @@
         then: function(f, e) {
           return this.wait(function(err, x) {
             if (err) {
-              if (e != null) {
-                return e(err);
-              } else {
-                throw err;
-              }
+              return typeof e === "function" ? e(err) : void 0;
             } else {
               return f(x);
             }
@@ -5737,7 +5792,7 @@
         return ret;
       };
       compile.cache = {};
-      render = function(text, values) {
+      return render = function(text, values) {
         var cache, fixed, i, j, key, n, output, pad, rest, type, value, _i, _ref, _ref1;
         cache = compile.cache[text];
         if (cache == null) {
@@ -5772,30 +5827,6 @@
         }
         return output.join("");
       };
-      return render;
-    })());
-    template.register_engine('js-eval', (function() {
-      var TemplateMachine;
-      TemplateMachine = (function(_super) {
-        __extends(TemplateMachine, _super);
-
-        function TemplateMachine() {
-          return TemplateMachine.__super__.constructor.apply(this, arguments);
-        }
-
-        TemplateMachine.STATE_TABLE = [
-          {
-            enter: function() {
-              this.data = [];
-              return this.GO(1);
-            }
-          }, {}
-        ];
-
-        return TemplateMachine;
-
-      })($.StateMachine);
-      return $.identity;
     })());
     return {
       $: {
