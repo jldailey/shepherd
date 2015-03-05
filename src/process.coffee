@@ -185,8 +185,7 @@ Process.killTree = (proc, signal) ->
 						null
 					if tokill.length
 						Process.exec("kill -#{signal} #{tokill.join ' '} &> /dev/null")
-							.then p.resolve, (err) ->
-								fail "killTree error while killing", err
+							.then p.resolve, p.resolve # ignore errors
 				catch err then fail "killTree error while walking:", err
 			), p.reject
 		catch err then fail "killTree error:", err
