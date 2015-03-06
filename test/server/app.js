@@ -10,6 +10,17 @@ console.log("Test Server starting on PID:", process.pid);
 	})
 });
 
+if( $(process.argv).contains('crash-mode') ) {
+	var crashFile = '/tmp/dont-crash'
+	if( Fs.existsSync(crashFile) ) {
+		Fs.unlink(crashFile)
+	} else {
+		console.log("Crashing due to CRASH MODE!");
+		Fs.writeFileSync(crashFile, "DONT CRASH")
+		process.exit(1)
+	}
+}
+
 requestCount = 0
 
 $.delay(500, function() { // add an artificial startup delay
