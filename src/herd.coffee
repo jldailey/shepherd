@@ -90,7 +90,6 @@ class Herd
 				# for safety, search our tree to make sure we are killing a managed PID
 				find_pid = parseInt req.params.pid, 10
 				tree.children?.forEach visit = (node) ->
-					console.log "visiting", node.pid, "vs", find_pid
 					if node.pid is find_pid
 						console.log "killing", node.pid
 						Process.kill(node.pid).then (->
@@ -104,7 +103,8 @@ class Herd
 		r = @opts.rabbitmq
 		if r.enabled and r.url and r.channel
 			verbose "Connecting to #{r.url} channel: #{r.channel}..."
-			Rabbit.connect r.url
+			Rabbit.connect(r.url).wait (err) ->
+				if err then log "Connection error:", err
 			Rabbit.subscribe r.channel, { op: "get-status" }, (msg) =>
 				log "ack receipt of get-status", msg
 				Process.findTree({ pid: process.pid }).then (tree) =>
@@ -119,20 +119,21 @@ class Herd
 
 	setStatus: (@status, args) ->
 		verbose "Changing status to:", @status
-		Rabbit.publish @opts.rabbitmq.channel, {
-			op: "set-status"
-			status: @status
-			args: args
-			shep: @shepherdId
-		}
+		if @opts.rabbitmq.enabled
+			Rabbit.publish(@opts.rabbitmq.channel, {
+				op: "set-status"
+				status: @status
+				args: args
+				shep: @shepherdId
+			})
 
 	start: (p = $.Promise()) ->
 		@setStatus "starting"
 		try return p
 		finally listen(@).then (=> # start the admin server
+			log "Admin server listening on port:", @opts.admin.port
 			# TODO: respect an admin.enabled=false configuration
 			p.then (=> @setStatus "started"), ((err) => @setStatus "failed: #{String err}")
-			log "Admin server listening on port:", @opts.admin.port
 			fail = (msg, err) ->
 				msg = String(msg) + $.debugStack err
 				verbose msg
@@ -215,13 +216,14 @@ class Herd
 		p.then $.identity, (err) ->
 			self.setStatus "listen failed: #{ String(err) }"
 		try return p
-		finally Process.clearCache().findOne({ ports: port }).then (owner) ->
-			if owner?
-				log "Killing old listener on port (#{port}): #{owner.pid}"
-				Process.kill(owner.pid, "SIGTERM").wait ->
-					log "Will retry after #{listen_retry_interval} ms"
-					$.delay listen_retry_interval, -> listen self, p
-			else Http.listen(port).then p.resolve, p.reject
+		finally
+			Process.clearCache().findOne({ ports: port }).wait (err, owner) ->
+				if owner?
+					log "Killing old listener on port (#{port}): #{owner.pid}"
+					Process.kill(owner.pid, "SIGTERM").wait ->
+						log "Will retry after #{listen_retry_interval} ms"
+						$.delay listen_retry_interval, -> listen self, p
+				else Http.listen(port).then p.resolve, p.reject
 
 	checkConflict = (servers) ->
 		ranges = ([server.port, server.port + server.count - 1] for server in servers)
