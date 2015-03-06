@@ -80,6 +80,7 @@ class Child
 				try
 					log "Restarting child..."
 					@process = null
+					@port_poller?.cancel()
 					@started.reset()
 					@started.attempts = 0
 					@start().then p.resolve, p.reject
@@ -221,7 +222,7 @@ class Server extends Child
 					unless @process then @started.reject("no process")
 					else
 						verbose "Waiting for port", @port, "to be owned by", @process.pid
-						Helpers.portIsOwned(@process.pid, @port, @opts.restart.timeout)
+						@port_poller = Helpers.portIsOwned(@process.pid, @port, @opts.restart.timeout, Opts.verbose)
 							.then (=>
 								verbose "Port #{@port} is successfully owned."
 								@started.resolve()

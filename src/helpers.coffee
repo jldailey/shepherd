@@ -26,7 +26,10 @@ Helpers.delay = (ms) ->
 
 # wait until a certain pid (or it's child) is listening on a port
 Helpers.portIsOwned = (pid, port, timeout, verbose) ->
-	try return p = $.Promise()
+	cancel = false
+	try return $.extend p = $.Promise(), {
+		cancel: -> cancel = true
+	}
 	finally
 		started = $.now
 		do poll_port = ->
@@ -45,7 +48,7 @@ Helpers.portIsOwned = (pid, port, timeout, verbose) ->
 						# if there is no owner, or the owner is not one of our targets
 						if (not owner) or (not $.matches owner.pid, target_pids)
 							# poll again later
-							setTimeout poll_port, 300
+							unless cancel then setTimeout poll_port, 300
 						else p.resolve owner
 			), p.reject
 
