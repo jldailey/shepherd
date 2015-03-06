@@ -33,14 +33,13 @@ Helpers.portIsOwned = (pid, port, timeout, verbose) ->
 	finally
 		started = $.now
 		do poll_port = ->
-			if cancel then p.resolve('cancelled')
+			if cancel then p.resolve("cancelled pid: #{pid}")
 			if $.now - started > timeout
 				return p.reject "Waiting failed after a timeout of: " + timeout + "ms"
 			target_pids = []
 			# find all children of our target pid
 			Process.clearCache().findOne({ pid: pid }).then (proc) ->
-				if cancel then p.resolve('cancelled')
-				unless proc then p.reject "no such pid: #{pid}"
+				if cancel or not proc then p.resolve("cancelled pid: #{pid}")
 				else Process.tree(proc).then (tree) ->
 					Process.walk tree, (node) ->
 						target_pids.push node.pid # build a list of target children

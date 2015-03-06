@@ -80,8 +80,6 @@ class Child
 				try
 					log "Restarting child..."
 					@process = null
-					if @port_poller?
-						@port_poller.cancel()
 					@started.reset()
 					@started.attempts = 0
 					@start().then p.resolve, p.reject
@@ -227,12 +225,11 @@ class Server extends Child
 							@port_poller.cancel()
 						@port_poller = Helpers.portIsOwned(@process.pid, @port, @opts.restart.timeout)
 							.then ((result) =>
-								unless result is 'cancelled'
+								unless $.is('string', result) and ~(result.indexOf 'cancelled')
 									verbose "Port #{@port} is successfully owned."
 									@started.resolve()
-									delete @port_poller
 								else
-									verbose "Port polling cancelled."
+									verbose "Port polling:", result
 							), @started.reject
 
 	env: -> super() + "#{@opts.portVariable}=\"#{@port}\""
