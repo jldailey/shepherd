@@ -13,7 +13,8 @@ Process.exec = (cmd, verbose) ->
 			ret = { output: "" }
 			child = Shell.exec cmd, { silent: true, async: true }, (exitCode) ->
 				try
-					if exitCode isnt 0 then p.reject ret.output
+					if exitCode isnt 0
+						p.reject if ret.output is "" then "Non-zero exit code: #{exitCode}" else ret.output
 					else p.resolve ret.output
 				catch err
 					log "exec: error handling process exit:", $.debugStack err
@@ -56,7 +57,7 @@ ps_parse = (output) ->
 		log "ps_parse error:", $.debugStack err
 
 # given the output of ps_parse, use "lsof" to attach listening ports
-lsof_cmd = "lsof -Pni | grep LISTEN"
+lsof_cmd = "lsof -Pni | grep LISTEN || exit 0"
 attach_ports = (procs) ->
 	try return attached = $.Promise()
 	finally
@@ -65,7 +66,10 @@ attach_ports = (procs) ->
 			for proc in procs
 				index[proc.pid] = proc
 				proc.ports = []
-			Process.exec(lsof_cmd).then (output) ->
+			Process.exec(lsof_cmd).wait (err, output) ->
+				if err
+					log "exec error:", $.debugStack err
+					process.exit 1
 				unless output then return attached.resolve procs
 				try
 					for line in output.split /\n/g
@@ -111,10 +115,12 @@ Process.find = (query) ->
 
 Process.findOne = (query) ->
 	try return p = $.Promise()
-	finally Process.find(query).then ((out) ->
-		try p.resolve out[0]
-		catch err then log "findOne error:", $.debugStack err
-	), p.reject
+	finally
+		Process.find(query).wait (err, out) ->
+			if err then p.reject err
+			else
+				try p.resolve out[0]
+				catch err then log "findOne error:", $.debugStack err
 
 Process.findTree = (query) ->
 	try return p = $.Promise()
