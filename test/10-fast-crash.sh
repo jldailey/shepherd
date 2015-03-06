@@ -31,6 +31,7 @@ for PORT in $PORTS; do
 done
 
 shepherd_start
+sleep 5 # add extra sleep time to let the crashing finish
 for PORT in $PORTS; do
 	check_output $PORT
 done
