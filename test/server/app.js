@@ -10,15 +10,20 @@ console.log("Test Server starting on PID:", process.pid);
 	})
 });
 
+function crashMode() {
+	console.log("Crashing due to CRASH MODE!");
+	$.delay(100, function() {
+		process.exit(1);
+	})
+}
+
 if( $(process.argv).contains('crash-mode') ) {
-	var crashFile = '/tmp/dont-crash'
-	if( Fs.existsSync(crashFile) ) {
-		Fs.unlink(crashFile)
-	} else {
-		console.log("Crashing due to CRASH MODE!");
-		Fs.writeFileSync(crashFile, "DONT CRASH")
-		process.exit(1)
-	}
+	var crashCount = 10, crashFile = '/tmp/crash-mode';
+	try { crashCount = parseInt(String(Fs.readFileSync(crashFile)), 10); } catch(err) { }
+	crashCount = Math.max(0, crashCount - 1)
+	if( crashCount == 0 ) crashCount = 10;
+	Fs.writeFileSync(crashFile, String(crashCount));
+	if( crashCount < 10 ) crashMode();
 }
 
 requestCount = 0
