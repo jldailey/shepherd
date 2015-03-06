@@ -15,6 +15,7 @@ fi
 
 function log {
 	if $VERBOSE; then echo $1; fi
+	echo TEST: $1 >> $LOG_FILE
 }
 
 function assert_notequal {
