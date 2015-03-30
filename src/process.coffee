@@ -37,7 +37,7 @@ ps_parse = (output) ->
 		# turn the 2D array of proc data into a list of process objects
 		keys = output[0].map $.slugize # parse the first line for the field names
 		return output.slice(1).map (row) -> # for each row
-			try return ret = Object.create(null) # return an object
+			try return ret = {} # return an object
 			finally for key,i in keys # attach an output value to each key for this row
 				if i is keys.length - 1 # the last value (the command) is all concatenated together
 					ret[key] = row.slice(i).join(' ')
@@ -45,7 +45,7 @@ ps_parse = (output) ->
 					val = row[i]
 					try # gently attempt to make numbers out of number-like strings
 						val = parseFloat(val)
-						unless isFinite(val) # revert the value on a soft parsing (NaN, Infinity, etc)
+						unless (typeof val is 'number') and isFinite(val) # revert the value on a soft parsing (NaN, Infinity, etc)
 							val = row[i]
 					catch e
 						val = row[i]
@@ -191,7 +191,8 @@ Process.killTree = (proc, signal) ->
 						null
 					if tokill.length
 						Process.exec("kill -#{signal} #{tokill.join ' '} &> /dev/null")
-							.then p.resolve, p.resolve # ignore errors
+							.wait (err, result) ->
+								p.resolve()
 				catch err then fail "killTree error while walking:", err
 			), p.reject
 		catch err then fail "killTree error:", err
