@@ -149,7 +149,7 @@ class Herd
 	stop: (signal, timeout=default_stop_timeout) ->
 		@setStatus "stopping"
 		log "Stopping all children with", signal
-		try return p = $.Progress 1
+		try return p = $.Progress(1).on 'progress', (cur, max) -> log "Stopping progress: #{cur}/#{max}"
 		finally
 			for child in @children when child.process
 				verbose "Attempting to stop child:", child.process.pid, signal
@@ -164,7 +164,7 @@ class Herd
 			p.finish(1).then (=>
 				@setStatus "stopped"
 				clearTimeout holder
-			), (err) ->
+			), (err) =>
 				@setStatus "failed to stop", String(err)
 
 	restart: (from = 0, done = $.Promise()) -> # perform a careful rolling restart
