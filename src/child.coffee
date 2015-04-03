@@ -50,7 +50,7 @@ class Child
 				log "shell >" , cmd = "env #{@env()} bash -c 'cd #{@opts.cd} && #{@opts.command}'"
 				@process = Shell.exec cmd, { silent: true, async: true }, $.identity
 				@process.on "exit", (err, signal) => @onExit err, signal
-				on_data = (prefix = "") => (data) =>
+				on_data = (prefix) => (data) =>
 					for line in String(data).split /\n/ when line.length
 						@log prefix + line
 				@process.stdout.on "data", on_data ""
@@ -104,8 +104,10 @@ class Child
 		try
 			signal = if $.is 'number', code then code - 128 else Process.getSignalNumber signal
 			@log "Child exited (signal=#{signal})", if @expectedExit then "(expected)" else ""
-			@restart() unless @expectedExit
-			@expectedExit = false
+			# add a small restart cooldown
+			$.delay 1000, =>
+				@restart() unless @expectedExit
+				@expectedExit = false
 		catch err
 			@log "child.onExit error:", $.debugStack err
 
