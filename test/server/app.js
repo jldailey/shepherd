@@ -17,6 +17,10 @@ function crashMode() {
 	})
 }
 
+// crash-mode makes the server crash (after 100ms) 10 times in a row
+// so add it all up and it should be 1 second + restart overhead
+// or, about (100ms + 1000ms) * 10 crashes + (500ms) * 1 success
+// or, about 12 seconds
 if( $(process.argv).contains('crash-mode') ) {
 	var crashCount = 10, crashFile = '/tmp/crash-mode';
 	try { crashCount = parseInt(String(Fs.readFileSync(crashFile)), 10); } catch(err) { }
