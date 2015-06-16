@@ -2,3 +2,5 @@
 Logging per block of servers
 	- so the API would log to one file, the admin to another, the workers to another.
 	- done in the JSON
+
+Should support a configtest operation
