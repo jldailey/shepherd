@@ -23,6 +23,8 @@
 		"jade":          "latest",
 		"rabbit-pubsub": "latest",
 		"serve-static":  "latest",
-		"shelljs":       "latest"
+		"shelljs":       "latest",
+		"JSV":           "latest",
+		"cson":          "latest"
 	}
 }
