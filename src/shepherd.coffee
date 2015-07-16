@@ -24,8 +24,9 @@ $.log.out = (a...) ->
 
 verbose "Opened output stream."
 
-Helpers = require './helpers'
-Herd    = require './herd'
+Helpers  = require './helpers'
+Herd     = require './herd'
+Validate = require './validate'
 
 if Opts.example
 	d = Herd.defaults()
@@ -42,6 +43,8 @@ if Opts.P and Opts.daemon # write out a pid file
 verbose "Reading config file:", Opts.F
 Helpers.readJson(Opts.F).wait (err, config) ->
 	if err then die "Failed to open herd file:", Opts.F, $.debugStack err
+	errors = Validate.isValidConfig(config)
+	if errors.length then die errors.join "\n"
 	log "Starting new herd, shepherd PID: " + process.pid
 	new Herd(config).start().wait (err) ->
 		if err then die "Failed to start herd:", $.debugStack err
