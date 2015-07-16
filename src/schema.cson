@@ -11,7 +11,7 @@ properties:
 			properties:
 				cd:           { type: "string", required: false } # this server's working directory
 				env:          { type: "object", required: false } # any custom/static environment variables you want to pass to every instance
-				port:         { type: "number", required: true  } # the starting port to listen on (see: count)
+				port:         { type: "number", required: false } # the starting port to listen on (see: count)
 				count:        { type: "number", required: false } # launch duplicates, incrementing 'port' for each new one.
 				prefix:       { type: "string", required: false } # prepend this to each line from stdout
 				command:      { type: "string", required: true  } # the full shell command to execute (e.g. "node app.js")
