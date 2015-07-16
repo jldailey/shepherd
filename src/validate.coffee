@@ -21,6 +21,14 @@ isFileWritable = (file) ->
 	catch then return false
 	return true
 
+isFileCreatable = (file) ->
+	path = $(file.split '/').slice(0,-1).join('/')
+	try
+		return false unless Fs.statSync(path).isDirectory()
+		Fs.accessSync(path, Fs.W_OK)
+	catch err then return false
+	return true
+
 isDirectory = (path) ->
 	try return Fs.statSync(path).isDirectory()
 	catch then return false
@@ -28,12 +36,18 @@ isDirectory = (path) ->
 Validate.isValidConfig = (obj) ->
 	schema = CSON.parseFile schemaFile()
 	errors = JSV.validate(obj, schema).errors.map readableError
-	if errors.length then return errors
+	return errors if errors.length
 
 	# manual checks:
 	# obj.nginx.config points to a writable file
-	if obj.nginx?.enabled and obj.nginx?.config and not isFileWritable(obj.nginx.config)
-		return [ 'In "nginx", field "config" failed validation: file is not writable' ]
+	if obj.nginx?.enabled and obj.nginx?.config
+		if (not isFileWritable obj.nginx.config) and (not isFileCreatable obj.nginx.config)
+			return [ 'In "nginx", field "config" failed validation: file is not writable' ]
+
+	# must specify at least one server or one worker
+	if (not obj.servers) and (not obj.workers)
+		return [ 'In "", field "servers" failed validation: must specify either "servers" or "workers"' ]
+
 	# server and worker 'cd' values point to accessible directories
 	for server,i in obj.servers ? []
 		if server.cd and not isDirectory(server.cd)
@@ -57,7 +71,7 @@ if require.main is module
 		process.exit 1
 	testData = [
 		{ }
-			[ 'In "", field "servers" failed validation: Property is required' ]
+			[ 'In "", field "servers" failed validation: must specify either "servers" or "workers"' ]
 
 		{ servers: [ { } ] }
 			[ 'In "servers.0", field "command" failed validation: Property is required' ]
