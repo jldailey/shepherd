@@ -3,8 +3,7 @@ additionalProperties: false
 properties:
 	servers: # Servers are things that run forever, listening on ports
 		type: "array"
-		required: true
-		minItems: 1 # There must be at least one server, or you probably have made a mistake.
+		required: false
 		items:
 			type: 'object'
 			additionalProperties: false
