@@ -7,17 +7,49 @@ Validate = module.exports
 
 schemaFile = -> $.config.get "SHEPHERD_SCHEMA", "src/schema.cson"
 
-readable = (err) ->
+readableError = (err) ->
 	path = $(err.uri.split '#').last().replace(/^\//,'').split(/\//)
 	field = $(path).last()
 	item = $(path).slice(0,-1).join(".")
+	message = err.message.replace("Instance is ","")
 	if err.attribute is 'type'
-		err.message += " (#{err.details[0]})"
-	return "In \"#{item}\", field \"#{field}\" failed validation: #{err.message}"
+		message += " (#{err.details[0]})"
+	return "In \"#{item}\", field \"#{field}\" failed validation: #{message}"
+
+isFileWritable = (file) ->
+	try Fs.accessSync(file, Fs.W_OK)
+	catch then return false
+	return true
+
+isDirectory = (path) ->
+	try return Fs.statSync(path).isDirectory()
+	catch then return false
 
 Validate.isValidConfig = (obj) ->
 	schema = CSON.parseFile schemaFile()
-	return JSV.validate(obj, schema).errors.map readable
+	errors = JSV.validate(obj, schema).errors.map readableError
+	if errors.length then return errors
+
+	# manual checks:
+	# obj.nginx.config points to a writable file
+	if obj.nginx?.enabled and obj.nginx?.config and not isFileWritable(obj.nginx.config)
+		return [ 'In "nginx", field "config" failed validation: file is not writable' ]
+	# server and worker 'cd' values point to accessible directories
+	for server,i in obj.servers ? []
+		if server.cd and not isDirectory(server.cd)
+			return [ "In \"servers.#{i}\", field \"cd\" failed validation: not a directory (#{server.cd})" ]
+	
+	for worker, i in obj.workers ? []
+		if worker.cd and not isDirectory(worker.cd)
+			return [ "In \"workers.#{i}\", field \"cd\" failed validation: not a directory (#{worker.cd})" ]
+
+	# rabbitmq.url should be a parsable url with protocol "amqp"
+	if obj.rabbitmq?.enabled and obj.rabbitmq?.url
+		unless $.URL.parse(obj.rabbitmq.url)?.protocol is "amqp"
+			return [ 'In "rabbitmq", field "url" failed validation: not a valid amqp:// URL' ]
+
+	# TODO: server port ranges don't overlap
+	return []
 
 if require.main is module
 	die = (err) ->
@@ -34,19 +66,34 @@ if require.main is module
 			[ ]
 
 		{ servers: [ { command: "echo" } ], nginx: { enabled: "false" } }
-			[ 'In "nginx", field "enabled" failed validation: Instance is not a required type (boolean)' ]
+			[ 'In "nginx", field "enabled" failed validation: not a required type (boolean)' ]
 
 		{ servers: [ { command: "echo" } ], admin: { enabled: "false" } }
-			[ 'In "admin", field "enabled" failed validation: Instance is not a required type (boolean)' ]
+			[ 'In "admin", field "enabled" failed validation: not a required type (boolean)' ]
 
 		{ servers: [ { command: "echo" } ], admin: { port: "false" } }
-			[ 'In "admin", field "port" failed validation: Instance is not a required type (number)' ]
+			[ 'In "admin", field "port" failed validation: not a required type (number)' ]
 
 		{ servers: [ { command: "echo" } ], rabbitmq: { enabled: "false" } }
-			[ 'In "rabbitmq", field "enabled" failed validation: Instance is not a required type (boolean)' ]
+			[ 'In "rabbitmq", field "enabled" failed validation: not a required type (boolean)' ]
 
 		{ servers: [ { command: "echo" } ], rabbitmq: { url: null } }
-			[ 'In "rabbitmq", field "url" failed validation: Instance is not a required type (string)' ]
+			[ 'In "rabbitmq", field "url" failed validation: not a required type (string)' ]
+
+		{ servers: [ { command: "echo" } ], rabbitmq: { enabled: true, url: "..."} }
+			[ 'In "rabbitmq", field "url" failed validation: not a valid amqp:// URL' ]
+
+		{ servers: [ { command: "echo" } ], nginx: { config: null } }
+			[ 'In "nginx", field "config" failed validation: not a required type (string)' ]
+
+		{ servers: [ { command: "echo" } ], nginx: { enabled: true, config: "..." } }
+			[ 'In "nginx", field "config" failed validation: file is not writable' ]
+
+		{ servers: [ { cd: "no_exist", command: "echo" } ] }
+			[ 'In "servers.0", field "cd" failed validation: not a directory (no_exist)' ]
+
+		{ servers: [ { cd: ".", command: "echo" } ] }
+			[ ]
 
 	]
 	assert = require 'assert'
