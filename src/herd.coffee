@@ -198,18 +198,26 @@ class Herd
 	writeNginxConfig = (self) ->
 		nginx = self.opts.nginx
 		try return p = $.Promise()
-		finally if (not nginx.enabled) or (not nginx.config)
-			p.resolve("Nginx configuration not enabled.")
-		else
-			fail = (msg, err) -> p.reject(msg + ($.debugStack err))
-			try
-				verbose "Writing nginx configuration to file:", nginx.config
-				Fs.writeFile nginx.config, buildNginxConfig(self), (err) ->
-					if err then fail "Failed to write nginx configuration file:", err
-					else Process.exec(nginx.reload).wait (err) ->
-						if err then fail "Failed to reload nginx:", err
-						else p.resolve("Nginx configuration written.")
-			catch err then fail "writeNginxConfig exception:", err
+		finally
+			fail = (msg, err) -> p.reject(msg + $.debugStack err)
+			pass = (msg)      -> p.resolve msg
+			if not $.is 'bool', nginx.enabled
+				fail "Invalid nginx configuration: nginx.enabled is not a boolean."
+			else if not $.is 'string', nginx.config
+				fail "Invalid nginx configuration: nginx.config is not a string."
+			else if not $.is 'string', nginx.reload
+				fail "Invalid nginx configuration: nginx.reload is not a string."
+			else if (not nginx.enabled) or (not nginx.config)
+				pass "Nginx integration not enabled."
+			else
+				try
+					verbose "Writing nginx configuration to file:", nginx.config
+					Fs.writeFile nginx.config, buildNginxConfig(self), (err) ->
+						if err then fail "Failed to write nginx configuration file:", err
+						else Process.exec(nginx.reload).wait (err) ->
+							if err then fail "Failed to reload nginx (exec: #{nginx.reload}):", err
+							else pass "Nginx configuration written."
+				catch err then fail "writeNginxConfig exception:", err
 
 	listen = (self, p = $.Promise()) ->
 		port = self.opts.admin.port
@@ -266,6 +274,7 @@ Herd.defaults = (opts) ->
 		channel: "shepherd"
 	}, opts.rabbitmq
 
+	# TODO: only set enabled=true if nginx is actually installed
 	opts.nginx = $.extend Object.create(null), (switch Os.platform()
 		when 'darwin'
 			enabled: true
@@ -277,8 +286,8 @@ Herd.defaults = (opts) ->
 			reload: "/etc/init.d/nginx reload"
 		else
 			enabled: false
-			config: null
-			reload: "echo WARN: I don't know how to reload nginx on platform: " + Os.platform()
+			config: "/dev/null"
+			reload: "echo WARN: I don't support nginx on platform: " + Os.platform()
 		), opts.nginx
 
 	opts.nginx.template or= """
