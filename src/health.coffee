@@ -11,8 +11,8 @@ monitors = Object.create(null)
 int = (n) -> parseInt n, 10
 
 monitor = (port, pid, check) ->
-	if port of monitor
-		verbose "WARN: ignoring attempt to monitor the same port twice (port: #{port})"
+	if port of monitors
+		verbose "IGNORED: attempt to monitor the same port twice (port: #{port})"
 		return
 	# 'check' is the opts.check block from the servers section of the shepherd.json file
 	# example:
@@ -34,7 +34,7 @@ monitor = (port, pid, check) ->
 			unmonitor(port)
 			Process.killTree(pid, 15)
 
-	monitors[port]  = $.interval check.interval, ->
+	monitors[port] = $.interval check.interval, ->
 		req = http.request {
 			port: port
 			path: check.url
