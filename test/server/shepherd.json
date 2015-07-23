@@ -31,4 +31,10 @@
 	}
   "nginx":    { "enabled": false }
   "admin":    { "enabled": false }
+	"loggly": {
+		"enabled": true
+		"token": "46ced5b3-0f07-4aad-9580-5db4c825e6d5"
+		"subdomain": "conductrics"
+		"json": true
+	}
 }
