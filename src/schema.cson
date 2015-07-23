@@ -79,6 +79,21 @@ properties:
 			enabled: { type: "boolean", required: false }
 			config:  { type: "string", required: false } # The path of the config file to generate (must be a full path to a writable file).
 			reload:  { type: "string", required: false } # The command to use to cause nginx to reload the generated configuration.
+	loggly:
+		type: "object"
+		required: false
+		additionalProperties: false
+		properties:
+			enabled: { type: "boolean", required: false }
+			token:   { type: "string", required: true }
+			subdomain: { type: "string", required: true }
+			tags: {
+				type: "array"
+				required: false
+				minItems: 0
+				items: { type: "string" }
+			}
+			json: { type: "boolean", required: false }
 	admin:
 		type: "object"
 		required: false
