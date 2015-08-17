@@ -11,6 +11,11 @@ die     = (a...) ->
 verbose = ->
 	if Opts.verbose then log.apply null, arguments
 
+outStr = {
+	write: (data, enc) -> # default output stream
+		console.log data
+}
+
 if Opts.O is "-"
 	try outStr = process.stdout
 	catch err then die "Failed to open stdout:", $.debugStack err
