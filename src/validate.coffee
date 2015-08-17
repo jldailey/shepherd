@@ -5,7 +5,7 @@ CSON = require('cson')
 
 Validate = module.exports
 
-schemaFile = -> $.config.get "SHEPHERD_SCHEMA", __dirname + "/src/schema.cson"
+schemaFile = -> $.config.get "SHEPHERD_SCHEMA", __dirname + "/../src/schema.cson"
 
 readableError = (err) ->
 	path = $(err.uri.split '#').last().replace(/^\//,'').split(/\//)
