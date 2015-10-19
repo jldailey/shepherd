@@ -33,8 +33,9 @@
   "admin":    { "enabled": false }
 	"loggly": {
 		"enabled": true
-		"token": "46ced5b3-0f07-4aad-9580-5db4c825e6d5"
-		"subdomain": "conductrics"
-		"json": true
+		"token": "245a108e-13e8-424a-9cc3-495f0800aa18"
+		"subdomain": "conductricslog"
+		"tags": ["unit-test"]
+		"json": false
 	}
 }
