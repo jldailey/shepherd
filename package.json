@@ -22,6 +22,7 @@
 		"hjson":         "latest",
 		"jade":          "latest",
 		"rabbit-pubsub": "latest",
+		"loggly":        "latest",
 		"serve-static":  "latest",
 		"shelljs":       "latest",
 		"JSV":           "latest",
