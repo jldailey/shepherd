@@ -51,6 +51,13 @@ Helpers.readJson(Opts.F).wait (err, config) ->
 	errors = Validate.isValidConfig(config)
 	if errors.length then die errors.join "\n"
 	log "Starting new herd, shepherd PID: " + process.pid
+	if config.loggly?.enabled
+		outStr = require("./loggly").createWriteStream {
+			token: config.loggly.token
+			subdomain: config.loggly.subdomain
+			tags: config.loggly.tags ? []
+			json: config.loggly.json ? false
+		}
 	new Herd(config).start().wait (err) ->
 		if err then die "Failed to start herd:", $.debugStack err
 
