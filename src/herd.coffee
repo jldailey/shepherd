@@ -134,16 +134,10 @@ class Herd
 			log "Admin server listening on port:", @opts.admin.port
 			# TODO: respect an admin.enabled=false configuration
 			p.then (=> @setStatus "started"), ((err) => @setStatus "failed: #{String err}")
-			fail = (msg, err) ->
-				msg = String(msg) + $.debugStack err
+			writeNginxConfig(@).then ((msg) => # write the dynamic configuration
 				verbose msg
-				p.reject msg
-			if checkConflict @opts.servers then fail "port range conflict"
-			else
-				writeNginxConfig(@).then ((msg) => # write the dynamic configuration
-					verbose msg
-					@restart().then p.resolve, p.reject
-				), p.reject
+				@restart().then p.resolve, p.reject
+			), p.reject
 		), p.reject
 
 	stop: (signal, timeout=default_stop_timeout) ->
@@ -232,16 +226,6 @@ class Herd
 						log "Will retry after #{listen_retry_interval} ms"
 						$.delay listen_retry_interval, -> listen self, p
 				else Http.listen(port).then p.resolve, p.reject
-
-	checkConflict = (servers) ->
-		ranges = ([server.port, server.port + server.count - 1] for server in servers)
-		for a in ranges
-			for b in ranges then switch true
-				when a is b then continue
-				when a[0] <= b[0] <= a[1] or a[0] <= b[1] <= a[1]
-					verbose "Conflict in port ranges:", a, b
-					return true
-		false
 
 	connectSignals = (self) ->
 		clean_exit = -> log "Exiting clean..."; process.exit clean_exit_code

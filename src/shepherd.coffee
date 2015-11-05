@@ -48,6 +48,7 @@ if Opts.P and Opts.daemon # write out a pid file
 verbose "Reading config file:", Opts.F
 Helpers.readJson(Opts.F).wait (err, config) ->
 	if err then die "Failed to open herd file:", Opts.F, $.debugStack err
+	config = Herd.defaults(config)
 	errors = Validate.isValidConfig(config)
 	if errors.length then die errors.join "\n"
 	log "Starting new herd, shepherd PID: " + process.pid

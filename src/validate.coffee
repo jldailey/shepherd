@@ -62,7 +62,16 @@ Validate.isValidConfig = (obj) ->
 		unless $.URL.parse(obj.rabbitmq.url)?.protocol is "amqp"
 			return [ 'In "rabbitmq", field "url" failed validation: not a valid amqp:// URL' ]
 
-	# TODO: server port ranges don't overlap
+	# server port ranges don't overlap (with each other or with the admin)
+	ranges = ([server.port, server.port + server.count - 1] for server in obj.servers)
+	for a in ranges
+		if obj.admin.enabled and a[0] <= obj.admin.port <= a[1]
+			return [ "In \"servers\", port range (#{a.join '-'}) conflicts with admin port: #{obj.admin.port}" ]
+		for b in ranges
+			if a is b then continue
+			if a[0] <= b[0] <= a[1] or a[0] <= b[1] <= a[1]
+				return [ "In \"servers\", conflict in port range: #{a.join '-'} overlaps with #{b.join '-'}" ]
+
 	return []
 
 if require.main is module

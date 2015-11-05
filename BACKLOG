@@ -4,3 +4,8 @@ Logging per block of servers
 	- done in the JSON
 
 Should support a configtest operation
+
+Better port conflict checking
+	- should happen as part of schema validation instead of start up
+	- should include a check of admin port vs child port ranges
+
