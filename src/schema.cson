@@ -77,8 +77,9 @@ properties:
 		additionalProperties: false
 		properties:
 			enabled: { type: "boolean", required: false }
-			config:  { type: "string", required: false } # The path of the config file to generate (must be a full path to a writable file).
+			config:  { type: "string", required: true } # The path of the config file to generate (must be a full path to a writable file).
 			reload:  { type: "string", required: false } # The command to use to cause nginx to reload the generated configuration.
+			template: { type: "any", required: false } # A template for generating the upstream configuration files.
 	loggly:
 		type: "object"
 		required: false
