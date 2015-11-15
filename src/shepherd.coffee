@@ -27,6 +27,8 @@ $.log.out = (a...) ->
 	try outStr.write a.map($.toString).join(' ') + "\n", 'utf8'
 	catch err then die "Failed to write to log:", $.debugStack err
 
+$.log.enableTimestamps()
+
 verbose "Opened output stream to: #{Opts.O}"
 
 Helpers  = require './helpers'
