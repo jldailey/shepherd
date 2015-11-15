@@ -284,14 +284,16 @@ Herd.defaults = (opts) ->
 			keepalive 32;
 		}
 	"""
-	opts.nginx.template = Handlebars.compile opts.nginx.template
-	opts.nginx.template.inspect = (level) -> # use a mock rendering as standard output
-		return '"' + opts.nginx.template({
-			upstream: "{{upstream}}",
-			pre: "{{#each servers}}"
-			servers: [ { port: "{{this.port}}" } ]
-			post: "{{/each}}"
-		}) + '"'
+	
+	unless $.is 'function', opts.nginx.template
+		opts.nginx.template = Handlebars.compile opts.nginx.template
+		opts.nginx.template.inspect = (level) -> # use a mock rendering as standard output
+			return '"' + opts.nginx.template({
+				upstream: "{{upstream}}",
+				pre: "{{#each servers}}"
+				servers: [ { port: "{{this.port}}" } ]
+				post: "{{/each}}"
+			}) + '"'
 
 	# the http server listens for REST calls and web hooks
 	opts.admin = $.extend Object.create(null), {
