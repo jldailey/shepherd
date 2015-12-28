@@ -31,6 +31,12 @@
 	}
   "nginx":    { "enabled": false }
   "admin":    { "enabled": false }
+	"mongodb": {
+		"enabled": true
+		"url": "mongodb://127.0.0.1:27017/mpath"
+		"collection": "logs"
+		"size": 100000000
+	}
 	"loggly": {
 		"enabled": true
 		"token": "245a108e-13e8-424a-9cc3-495f0800aa18"

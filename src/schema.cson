@@ -95,6 +95,15 @@ properties:
 				items: { type: "string" }
 			}
 			json: { type: "boolean", required: false }
+	mongodb:
+		type: "object"
+		required: false
+		additionalProperties: false
+		properties:
+			enabled:    { type: "boolean", required: false }
+			url:        { type: "string", required: true } # The full url to connect to a MongoDB instance (including database).
+			collection: { type: "string", required: true }
+			size:       { type: "number", required: true }
 	admin:
 		type: "object"
 		required: false

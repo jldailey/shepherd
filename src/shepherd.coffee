@@ -11,21 +11,19 @@ die     = (a...) ->
 verbose = ->
 	if Opts.verbose then log.apply null, arguments
 
-outStr = {
-	write: (data, enc) -> # default output stream
-		console.log data
+# create the default output stream
+outputs = {
+	'-': process.stdout
+	# add addtional { key: WriteStream } pairs here to log to additional places
 }
 
-if Opts.O is "-"
-	try outStr = process.stdout
-	catch err then die "Failed to open stdout:", $.debugStack err
-else
-	try outStr = Fs.createWriteStream Opts.O, { flags: 'a', mode: 0o666, encoding: 'utf8' }
+if Opts.O isnt "-"
+	try outputs[Opts.O] = Fs.createWriteStream Opts.O, { flags: 'a', mode: 0o666, encoding: 'utf8' }
 	catch err then die "Failed to open output stream:", $.debugStack err
 
 $.log.out = (a...) ->
-	try outStr.write a.map($.toString).join(' ') + "\n", 'utf8'
-	catch err then die "Failed to write to log:", $.debugStack err
+	for k, s of outputs
+		try s.write a.map($.toString).join(' ') + "\n", 'utf8'
 
 $.log.enableTimestamps()
 
@@ -55,12 +53,20 @@ Helpers.readJson(Opts.F).wait (err, config) ->
 	if errors.length then die errors.join "\n"
 	log "Starting new herd, shepherd PID: " + process.pid
 	if config.loggly?.enabled
-		outStr = require("./loggly").createWriteStream {
+		outputs['loggly'] = require("./loggly").createWriteStream {
 			token: config.loggly.token
 			subdomain: config.loggly.subdomain
 			tags: config.loggly.tags ? []
 			json: config.loggly.json ? false
 		}
+		verbose "Opened output stream to Loggly (#{config.loggly.subdomain})."
+	if config.mongodb?.enabled
+		outputs['mongodb'] = require("./mongodb").createWriteStream {
+			url: config.mongodb.url
+			collection: config.mongodb.collection
+			size: config.mongodb.size
+		}
+		verbose "Opened output stream to MongoDB (#{config.mongodb.url}/#{config.mongodb.collection})"
 	new Herd(config).start().wait (err) ->
 		if err then die "Failed to start herd:", $.debugStack err
 
