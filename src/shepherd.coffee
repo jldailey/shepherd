@@ -1,6 +1,6 @@
 Opts    = require './opts'
 if Opts.daemon then require('daemon') { # fork into the background
-	stdout: process.stdout, stderr: process.stderr
+	# stdout: 'inherit', stdin: 'inherit'
 }
 $       = require "bling"
 Fs      = require "fs"
