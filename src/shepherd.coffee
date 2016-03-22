@@ -17,13 +17,17 @@ outputs = {
 	# add addtional { key: WriteStream } pairs here to log to additional places
 }
 
+# create additional output streams requested by the user
 if Opts.O isnt "-"
 	try outputs[Opts.O] = Fs.createWriteStream Opts.O, { flags: 'a', mode: 0o666, encoding: 'utf8' }
 	catch err then die "Failed to open output stream:", $.debugStack err
 
 $.log.out = (a...) ->
+	data = a.map($.toString).join(' ') + "\n"
 	for k, s of outputs
-		try s.write a.map($.toString).join(' ') + "\n", 'utf8'
+		try s.write data, 'utf8'
+		catch err
+			console.error "failed to write to output[#{k}]:", $.debugStack err
 
 $.log.enableTimestamps()
 
@@ -45,9 +49,10 @@ if Opts.P # write out a pid file
 	verbose "Writing pid file:", Opts.P
 	Fs.writeFileSync Opts.P, String process.pid
 
+
 verbose "Reading config file:", Opts.F
 Helpers.readJson(Opts.F).wait (err, config) ->
-	if err then die "Failed to open herd file:", Opts.F, $.debugStack err
+	if err then die "Failed to open json file:", Opts.F, $.debugStack err
 	config = Herd.defaults(config)
 	errors = Validate.isValidConfig(config)
 	if errors.length then die errors.join "\n"
