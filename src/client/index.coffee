@@ -3,7 +3,7 @@
 program = require("commander")
 net = require "net"
 $ = require 'bling'
-echo = $.logger('[client]')
+echo = $.logger('[shepherd]')
 
 # read package.json
 pkg = JSON.parse require("fs").readFileSync __dirname + "/../../package.json"
@@ -25,7 +25,10 @@ send_command = (cmd) ->
 
 	socket = net.connect({ path: socketFile})
 	socket.on 'error', (err) -> # probably daemon is not running, should start it
-		$.log "socket.on 'error', ->", $.debugStack err
+		if err.code is 'ENOENT'
+			echo "Server is not running."
+		else
+			$.log "socket.on 'error', ->", $.debugStack err
 
 	socket.on 'connect', ->
 		message = codec.stringify action.toMessage cmd
