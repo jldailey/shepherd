@@ -8,22 +8,11 @@ $ = require "bling"
 fs = require "fs"
 net = require "net"
 Shell = require "shelljs"
-codec = $.TNET
-echo = $.logger('[shepd]')
+{pidFile, socketFile, configFile} = require "./files"
+{echo} = require "./output"
 actions = require("./actions")
 
-unless 'HOME' of process.env
-	echo "No $HOME in environment, can't place .shepherd directory."
-	process.exit 1
-
-
-basePath = "#{process.env.HOME}/.shepherd"
-Shell.exec("mkdir -p #{basePath}", { silent: true })
-
-makePath = (parts...) -> [basePath].concat(parts).join "/"
-pidFile = makePath "pid"
-socketFile = makePath "socket"
-configFile = makePath "config"
+codec = $.TNET
 
 readPid = ->
 	try parseInt fs.readFileSync(pidFile).toString(), 10

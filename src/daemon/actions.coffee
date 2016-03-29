@@ -1,21 +1,27 @@
 
 $ = require 'bling'
-echo = $.logger "[shepd]"
 Shell = require 'shelljs'
+Process = require "../process"
+{echo, stdout, stderr} = require "./output"
 codec = $.TNET
 
 # the global herd of processes
-Groups = {}
+Groups = new Map()
+# m.clear m.delete m.entries m.forEach m.get m.has m.keys m.set m.size m.values
 
 class Group
 	constructor: (@name, @cd, @exec, @n, @port) ->
 		@procs = $.range(0,@n).map (i) =>
-			new Proc "#{@name}-#{i}", @cd, @exec, @port + i, @
+			port = undefined
+			if @port
+				port = @port + i
+			new Proc "#{@name}-#{i}", @cd, @exec, port, @
 
 class Proc
 	constructor: (@id, @cd, @exec, @port, @group) ->
 		# the time of the most recent start
 		@started = undefined
+		@cooldown = 25 # this increases after each failed restart
 		# is this process expected to be running?
 		@expected = false
 		# expose uptime
@@ -24,7 +30,8 @@ class Proc
 				return 0 unless @started?
 				return $.now - @started
 		}
-	log: $.logger "[shepd] [#{@id}]"
+
+	log: (args...) -> $.log @id, args...
 
 	# Start this process if it isn't already.
 	start: ->
@@ -32,16 +39,25 @@ class Proc
 			echo "Ignoring request to start instance #{@id} (reason: already started)."
 			return
 		@expected = true
-		@proc = Shell.exec @exec, { cwd: @cd, env: { PORT: @port }, silent: true, async: true }
-		@started = $.now
-		@proc.stdout.pipe(process.stdout)
-		@proc.stderr.pipe(process.stderr)
-		@proc.on 'exit', (code, signal) =>
-			@log "Process exited, code=#{code} signal=#{signal}."
-			@started = undefined
-			if @expected
-				@log "Automatically restarting..."
-				$.immediate => @start()
+		env = {}
+		if @port
+			Process.findOne({ ports: [ @port ] }).then (proc) =>
+				if proc
+					Process.kill proc.pid, 'SIGTERM'
+				env.PORT = @port
+				@proc = Shell.exec @exec, { cwd: @cd, env: env, silent: true, async: true }
+				@started = $.now
+				resetCooldown = $.delay 5000, => @cooldown = 0
+				@proc.stdout.pipe(stdout)
+				@proc.stderr.pipe(stderr)
+				@proc.on 'exit', (code, signal) =>
+					@log "Process exited, code=#{code} signal=#{signal}."
+					@started = undefined
+					if @expected
+						@cooldown *= 2
+						@log "Automatically restarting... (#{(@cooldown / 1000).toFixed 2}s cooldown)"
+						resetCooldown.cancel()
+						$.delay @cooldown, => @start()
 
 	stop: ->
 		@expected = false
@@ -51,8 +67,8 @@ class Proc
 		@proc.kill('SIGTERM')
 
 	restart: ->
-
-
+		@stop()
+		@start()
 
 doInstance = (method, instanceId) ->
 	return unless instanceId?.length
@@ -105,7 +121,15 @@ module.exports = actions = {
 			return
 		if msg.g of Groups
 			echo "Ignoring add request for group #{msg.g} (reason: already created)."
-		else Groups[msg.g] = new Group(msg.g, msg.cd, msg.exec, msg.n, msg.p)
-	remove: TODO 'remove'
+		else
+			Groups[msg.g] = new Group(msg.g, msg.cd, msg.exec, msg.n, msg.p)
+			Config.saveMessage(msg)
+	remove: (msg) ->
+		unless msg.g and msg.g.length
+			echo "--group is required with 'remove'"
+			return
+		if msg.g of Groups
+			delete Groups[msg.g]
+			Config.saveMessage(msg)
 	scale: TODO 'scale'
 }
