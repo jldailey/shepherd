@@ -5,73 +5,106 @@
 # first, we communicate with children via a journal file
 # this has the series of configuration commands 
 $ = require "bling"
-fs = require "fs"
-net = require "net"
+Fs = require "fs"
+Net = require "net"
 Shell = require "shelljs"
-codec = $.TNET
+Actions = require("./actions")
+{pidFile, socketFile, configFile} = require "./files"
 echo = $.logger('[shepd]')
-actions = require("./actions")
 
 unless 'HOME' of process.env
 	echo "No $HOME in environment, can't place .shepherd directory."
 	process.exit 1
 
-
-basePath = "#{process.env.HOME}/.shepherd"
-Shell.exec("mkdir -p #{basePath}", { silent: true })
-
-makePath = (parts...) -> [basePath].concat(parts).join "/"
-pidFile = makePath "pid"
-socketFile = makePath "socket"
-configFile = makePath "config"
-
 readPid = ->
-	try parseInt fs.readFileSync(pidFile).toString(), 10
+	try parseInt Fs.readFileSync(pidFile).toString(), 10
 	catch then undefined
 
-if $(process.argv).last() is "stop"
+handleMessage = (msg, client) ->
+	# each message invokes an action from a registry
+	# defined in src/daemon/actions.coffee
+	echo "Handling action: #{msg.c}"
+	action = Actions[msg.c]
+	return unless action
+	doLog = action.onMessage?(msg, client)
+	# if this is an action that came from a real client
+	# (as opposed to from readLog), and it wants to be,
+	# then write it to the configuration log
+	if client and doLog
+		addToLog(msg)
+
+addToLog = (msg) ->
+	echo "Adding message to log...", msg
+	Fs.appendFileSync configFile, $.TNET.stringify msg
+
+readLog = ->
+	try data = Fs.readFileSync configFile
+	catch err
+		if err.code is "ENOENT" then return
+	
+	while data.length > 0
+		[msg, data] = $.TNET.parseOne(data)
+		handleMessage(msg)
+
+doStop = (exit=true) ->
 	if pid = readPid()
+		# send a stop command to all running instances
+		Actions.stop.onMessage({})
 		result = Shell.exec "kill #{pid}", { silent: true }
 		if result.stderr.indexOf("No such process") > -1
 			echo "Removing stale PID file and socket."
-			try fs.unlink(pidFile)
-			try fs.unlink(socketFile)
+			try Fs.unlink(pidFile)
+			try Fs.unlink(socketFile)
 	else
 		echo "Not running."
-	process.exit 0
-
-exists = (path) -> return try fs.statSync(path).isFile() catch then false
-
-if exists(pidFile)
-	echo "Already running as PID:", readPid()
-	process.exit 1
-
-if exists(socketFile)
-	echo "Socket file still exists:", socketFile
-	process.exit 1
-
-echo "Writing PID to file:", process.pid
-fs.writeFileSync(pidFile, process.pid)
-
-echo "Opening socket...", socketFile
-socket = net.Server().listen({ path: socketFile })
-socket.on 'error', (err) ->
-	echo "Failed to open socket:", $.debugStack err
-	process.exit 1
-socket.on 'connection', (client) ->
-	client.on 'data', (msg) ->
-		msg = codec.parse(msg.toString())
-		# each message invokes an action from a registry
-		# defined in src/daemon/actions.coffee
-		actions[msg.c]?(msg, client)
-
-shutdown = (signal) -> ->
-	echo "Shutting down...", signal
-	try fs.unlinkSync(pidFile)
-	try socket.close()
-	if signal isnt 'exit'
+	if exit
 		process.exit 0
 
-for sig in ['SIGINT','SIGTERM','exit']
-	process.on sig, shutdown(sig) 
+switch $(process.argv).last()
+	when "stop" then doStop()
+	when "restart"
+		cmd = process.argv.join(' ')
+		start = cmd.replace(/ restart$/, " start")
+		doStop(false)
+		# start a new child that is a copy of ourself
+		child = Shell.exec start, { silent: true, async: true }
+		child.unref()
+		# die
+		process.exit 1
+	else
+		exists = (path) -> return try Fs.statSync(path).isFile() catch then false
+
+		if exists(pidFile)
+			echo "Already running as PID:", readPid()
+			process.exit 1
+
+		if exists(socketFile)
+			echo "Socket file still exists:", socketFile
+			process.exit 1
+
+		echo "Writing PID to file:", process.pid
+		Fs.writeFileSync(pidFile, process.pid)
+
+		echo "Reading configuration state..."
+		readLog()
+
+		echo "Opening socket...", socketFile
+		socket = Net.Server().listen({ path: socketFile })
+		socket.on 'error', (err) ->
+			echo "Failed to open socket:", $.debugStack err
+			process.exit 1
+		socket.on 'connection', (client) ->
+			client.on 'data', (msg) ->
+				msg = $.TNET.parse(msg.toString())
+				handleMessage(msg, client)
+
+		shutdown = (signal) -> ->
+			echo "Shutting down...", signal
+			try Fs.unlinkSync(pidFile)
+			try socket.close()
+			if signal isnt 'exit'
+				process.exit 0
+
+		for sig in ['SIGINT','SIGTERM','exit']
+			process.on sig, shutdown(sig) 
 

@@ -30,7 +30,6 @@ module.exports = {
 		toMessage: (cmd) ->
 			{ c: 'status' }
 		onResponse: (resp) ->
-			$.log "raw response:", resp
 			resp.unshift ["Instance", "PID", "Port", "Uptime", "Healthy"]
 			for line,i in resp
 				if i > 0
