@@ -1,32 +1,35 @@
 
 $ = require 'bling'
+Process = require "../process"
 Shell = require 'shelljs'
 Fs = require 'fs'
 {configFile} = require "./files"
-{stdout, stderr} = require "./output"
-
+{echo, stdout, stderr} = require "./output"
 codec = $.TNET
 echo = $.logger "[shepd]"
 
 # the global herd of processes
-Groups = {}
+Groups = new Map()
+# m.clear m.delete m.entries m.forEach m.get m.has m.keys m.set m.size m.values
 
 class Group
 	constructor: (@name, @cd, @exec, @n, @port) ->
 		@procs = $.range(0,@n).map (i) =>
-			new Proc "#{@name}-#{i}", @cd, @exec, @port + i, @
+			port = undefined
+			if @port
+				port = @port + i
+			new Proc "#{@name}-#{i}", @cd, @exec, port, @
 
 class Proc
 	constructor: (@id, @cd, @exec, @port, @group) ->
 		# the time of the most recent start
 		@started = undefined
+		@cooldown = 25 # this increases after each failed restart
 		# is this process expected to be running?
 		@expected = false
 		# expose uptime
 		$.defineProperty @, 'uptime', {
-			get: =>
-				return 0 unless @started?
-				return $.now - @started
+			get: => if @started then ($.now - started) else 0
 		}
 		@log = $.logger "[shepd] [#{@id}]"
 
@@ -38,25 +41,31 @@ class Proc
 		@expected = true
 		env = {}
 		if @port
-			env.PORT = @port
-		@proc = Shell.exec @exec, { cwd: @cd, env: env, silent: true, async: true }
-		@started = $.now
-		@proc.stdout.on 'data', (data) =>
-			for line in data.toString().split '\n'
-				stdout.write "[#{@id}] " + line + "\n"
-		@proc.stderr.on 'data', (data) =>
-			for line in data.toString().split '\n'
-				stderr.write "[#{@id}] (stderr) " + line + "\n"
-		@proc.on 'exit', (code, signal) =>
-			@log "Process exited, code=#{code} signal=#{signal}."
-			@proc = undefined
-			@started = undefined
-			if @expected
-				@log "Automatically restarting..."
-				$.immediate => @start()
-			else
-				@proc?.unref?()
-				@proc = undefined
+			Process.findOne({ ports: [ @port ] }).then (proc) =>
+				if proc
+					Process.kill proc.pid, 'SIGTERM'
+				if @port
+					env.PORT = @port
+				@proc = Shell.exec @exec, { cwd: @cd, env: env, silent: true, async: true }
+				@started = $.now
+				resetCooldown = $.delay 5000, => @cooldown = 25
+				@proc.stdout.on 'data', (data) =>
+					for line in data.toString().split '\n'
+						stdout.write "[#{@id}] " + line + "\n"
+				@proc.stderr.on 'data', (data) =>
+					for line in data.toString().split '\n'
+						stderr.write "[#{@id}] (stderr) " + line + "\n"
+				@proc.on 'exit', (code, signal) =>
+					@log "Process exited, code=#{code} signal=#{signal}."
+					@started = undefined
+					if @expected
+						@cooldown *= 2
+						@log "Automatically restarting... (#{(@cooldown / 1000).toFixed 2}s cooldown)"
+						resetCooldown.cancel()
+						$.delay @cooldown, => @start()
+					else
+						@proc?.unref?()
+						@proc = undefined
 
 	stop: ->
 		@expected = false

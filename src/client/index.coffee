@@ -16,9 +16,10 @@ codec = $.TNET # slower than JSON but allows sending nulls, custom types, etc
 basePath = "#{process.env.HOME}/.shepherd"
 socketFile = [basePath, "socket"].join "/"
 
+# import the action registry
 actions = require("./actions")
 
-# once command strings are parsed, they get sent to the daemon
+# every action passes command-line objects to the server
 send_command = (cmd) ->
 	return unless cmd._name of actions
 	action = actions[cmd._name]
@@ -31,24 +32,25 @@ send_command = (cmd) ->
 			$.log "socket.on 'error', ->", $.debugStack err
 
 	socket.on 'connect', ->
-		message = codec.stringify action.toMessage cmd
-		
-		socket.write message, ->
+		socket.write codec.stringify(action.toMessage cmd), ->
 			# some commands wait for a response
 			if 'onResponse' of action
-				echo "Waiting for response..."
+				delay = $.delay 1000, ->
+					echo "Timed-out waiting for a response from the server."
+					socket.end()
 				socket.on 'data', (resp) ->
+					delay.cancel()
 					action.onResponse codec.parse resp.toString()
 					socket.end()
 			else socket.end()
-		echo "Wrote message:", message
 
+# use the action registry to set command-line options
 for name, action of actions
 	p = program.command(name)
 	for option in action.options ? []
 		p.option option[0], option[1]
 	p.action send_command
 
-# this will parse the command line and invoke the action handlers above
+# parse the command line and invoke the action handlers
 program.parse process.argv
 

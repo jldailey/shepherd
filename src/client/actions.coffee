@@ -30,9 +30,10 @@ module.exports = {
 		toMessage: (cmd) ->
 			{ c: 'status' }
 		onResponse: (resp) ->
+			resp.unshift ["--------", "---", "----", "------", "-------"]
 			resp.unshift ["Instance", "PID", "Port", "Uptime", "Healthy"]
 			for line,i in resp
-				if i > 0
+				if i > 1
 					line[2] ?= "-"
 					line[3] = formatUptime line[3]
 					line[4] = if line[4] is undefined then "?" else yesNo line[4]

@@ -10,7 +10,7 @@ Net = require "net"
 Shell = require "shelljs"
 Actions = require("./actions")
 {pidFile, socketFile, configFile} = require "./files"
-echo = $.logger('[shepd]')
+{echo} = require "./output"
 
 unless 'HOME' of process.env
 	echo "No $HOME in environment, can't place .shepherd directory."
