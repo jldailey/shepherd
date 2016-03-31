@@ -4,9 +4,8 @@ Process = require "../process"
 Shell = require 'shelljs'
 Fs = require 'fs'
 {configFile} = require "./files"
-{echo, stdout, stderr} = require "./output"
+{echo, stdout, stderr} = Output = require "./output"
 codec = $.TNET
-echo = $.logger "[shepd]"
 
 # the global herd of processes
 Groups = new Map()
@@ -24,12 +23,13 @@ class Proc
 	constructor: (@id, @cd, @exec, @port, @group) ->
 		# the time of the most recent start
 		@started = undefined
+		@enabled = false
 		@cooldown = 25 # this increases after each failed restart
 		# is this process expected to be running?
 		@expected = false
 		# expose uptime
 		$.defineProperty @, 'uptime', {
-			get: => if @started then ($.now - started) else 0
+			get: => if @started then ($.now - @started) else 0
 		}
 		@log = $.logger "[shepd] [#{@id}]"
 
@@ -37,83 +37,105 @@ class Proc
 	start: ->
 		if @started
 			echo "Ignoring request to start instance #{@id} (reason: already started)."
-			return
+			return false
+		unless @enabled
+			echo "Ignoring request to start instance #{@id} (reason: disabled)."
+			return false
 		@expected = true
 		env = {}
+		resetCooldown = $.delay 5000, => @cooldown = 25
+		retryStart = =>
+			@cooldown *= 2
+			resetCooldown.cancel()
+			$.delay @cooldown, => @start()
+		doStart = =>
+			@proc = Shell.exec @exec, { cwd: @cd, env: env, silent: true, async: true }
+			@started = $.now
+			@proc.stdout.on 'data', (data) =>
+				for line in data.toString().split '\n'
+					stdout.write "[#{@id}] " + line + "\n"
+			@proc.stderr.on 'data', (data) =>
+				for line in data.toString().split '\n'
+					stderr.write "[#{@id}] (stderr) " + line + "\n"
+			@proc.on 'exit', (code, signal) =>
+				@log "Process exited, code=#{code} signal=#{signal}."
+				@started = undefined
+				if @expected
+					retryStart()
+				else
+					@proc?.unref?()
+					@proc = undefined
 		if @port
-			Process.findOne({ ports: [ @port ] }).then (proc) =>
+			env.PORT = @port
+			Process.findOne({ ports: @port }).then (proc) =>
 				if proc
+					@log "Attempting to kill owner of my port, pid:", proc.pid
 					Process.kill proc.pid, 'SIGTERM'
-				if @port
-					env.PORT = @port
-				@proc = Shell.exec @exec, { cwd: @cd, env: env, silent: true, async: true }
-				@started = $.now
-				resetCooldown = $.delay 5000, => @cooldown = 25
-				@proc.stdout.on 'data', (data) =>
-					for line in data.toString().split '\n'
-						stdout.write "[#{@id}] " + line + "\n"
-				@proc.stderr.on 'data', (data) =>
-					for line in data.toString().split '\n'
-						stderr.write "[#{@id}] (stderr) " + line + "\n"
-				@proc.on 'exit', (code, signal) =>
-					@log "Process exited, code=#{code} signal=#{signal}."
-					@started = undefined
-					if @expected
-						@cooldown *= 2
-						@log "Automatically restarting... (#{(@cooldown / 1000).toFixed 2}s cooldown)"
-						resetCooldown.cancel()
-						$.delay @cooldown, => @start()
-					else
-						@proc?.unref?()
-						@proc = undefined
+					retryStart()
+				else doStart()
+		else doStart()
+		true
 
 	stop: ->
 		@expected = false
 		unless @started
 			echo "Ignoring request to stop instance #{@id} (reason: already stopped)."
-			return
-		if @proc?.pid
+		else if @proc?.pid
 			echo "Killing process: #{@proc.pid}..."
 			Shell.exec "kill #{@proc.pid}"
 			@started = undefined
+			return true
+		false
 
 	restart: ->
 		if @started then @stop()
 		@start()
 	
-	enable: -> @start() # these look identical here, but enable/disable are saved to the config log
-	disable: -> @stop() # while stop/start are not
+	enable: ->
+		acted = ! @enabled
+		@enabled = true
+		@start()
+		acted
+	disable: ->
+		acted = @enabled
+		@enabled = false
+		@stop() # while stop/start are not
+		acted
 
 
 doInstance = (method, instanceId) ->
-	return unless instanceId?.length
+	acted = false
+	return acted unless instanceId?.length
 	[groupId, index] = instanceId.split('-')
 	index = parseInt index, 10
 	echo "About to #{method} instance #{index} in #{groupId} group."
 	# echo Groups[groupId].procs[index]
-	Groups[groupId].procs[index][method]()
-	null
+	acted = Groups[groupId].procs[index][method]()
+	return acted
 
 doGroup = (method, groupId) ->
-	return unless groupId?.length and groupId of Groups
+	acted = false
+	unless groupId?.length and groupId of Groups
+		echo "Invalid --group parameter: '#{groupId}'"
+		return false
 	for proc in Groups[groupId].procs
-		proc[method]()
-	null
+		acted or= proc[method]()
+	return acted
 
 doAll = (method) ->
+	acted = false
 	for group of Groups
 		for proc in group.procs
-			proc[method]
-	null
+			acted or= proc[method]
+	return acted
 
 simple = (method, doLog=false) -> {
 	onMessage: (msg) ->
-		switch
+		acted = switch
 			when msg.g then doGroup method, msg.g
 			when msg.i then doInstance method, msg.i
-			else
-				doAll method
-		doLog
+			else doAll method
+		acted and doLog
 }
 
 module.exports = actions = {
@@ -132,6 +154,11 @@ module.exports = actions = {
 				for proc in group.procs
 					output.push [ proc.id, proc.proc?.pid, proc.port, proc.uptime, healthy ]
 			client.write codec.stringify(output)
+			return false
+	}
+	tail: {
+		onMessage: (msg, client) ->
+			Output.tail(client)
 			return false
 	}
 	add: {

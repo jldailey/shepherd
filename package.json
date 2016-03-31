@@ -13,20 +13,12 @@
 	"author": "Jesse Dailey <jesse.dailey@gmail.com>",
 	"repository": "https://github.com/jldailey/shepherd.git",
 	"dependencies": {
-		"basic-auth":    "latest",
 		"bling":         "latest",
 		"commander":     "latest",
 		"daemon":        "latest",
-		"express":       "latest",
-		"handlebars":    "latest",
-		"hjson":         "latest",
-		"jade":          "latest",
-		"rabbit-pubsub": "latest",
 		"loggly":        "latest",
 		"mongodb":       "latest",
-		"serve-static":  "latest",
 		"shelljs":       "latest",
-		"JSV":           "latest",
-		"cson":          "latest"
+		"chalk":         "latest"
 	}
 }

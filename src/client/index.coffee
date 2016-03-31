@@ -34,6 +34,8 @@ send_command = (cmd) ->
 	socket.on 'connect', ->
 		socket.write codec.stringify(action.toMessage cmd), ->
 			# some commands wait for a response
+			if 'onConnect' of action
+				action.onConnect(socket)
 			if 'onResponse' of action
 				delay = $.delay 1000, ->
 					echo "Timed-out waiting for a response from the server."

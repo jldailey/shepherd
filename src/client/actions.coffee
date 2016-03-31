@@ -1,4 +1,5 @@
 $ = require 'bling'
+Chalk = require 'chalk'
 {yesNo, formatUptime} = require "./format"
 
 module.exports = {
@@ -33,11 +34,22 @@ module.exports = {
 			resp.unshift ["--------", "---", "----", "------", "-------"]
 			resp.unshift ["Instance", "PID", "Port", "Uptime", "Healthy"]
 			for line,i in resp
+				colors = $.zeros(5).map -> 'white'
 				if i > 1
-					line[2] ?= "-"
+					line[1] ?= "-"
+					colors[1] = if line[1] is '-' then 'red' else 'green'
 					line[3] = formatUptime line[3]
 					line[4] = if line[4] is undefined then "?" else yesNo line[4]
-				$.log line.map((item) -> $.padLeft String(item ? ''), 14).join ''
+					if line[4] is "?"
+						colors[4] = "yellow"
+				$.log ( Chalk[colors[i]]($.padLeft String(item ? ''), 14) for item,i in line).join ''
+	}
+	tail: {
+		toMessage: (cmd) ->
+			{ c: 'tail' }
+		onConnect: (socket) ->
+			$.log "tail: piping response socket to stdout..."
+			socket.pipe(process.stdout)
 	}
 	add: {
 		options: [
