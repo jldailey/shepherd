@@ -1,28 +1,53 @@
 $ = require 'bling'
-stream = require 'stream'
+Fs = require 'fs'
+Stream = require 'stream'
+Chalk = require 'chalk'
 
 drivers = {
-	console: {
-		createWriteStreams: -> [ process.stdout, process.stderr ]
-	}
-	file: {
-		createWriteStreams: (url) ->
-			stdout = Fs.createWriteStream(url.path)
-			[stdout, stdout]
-	}
+	console: class ConsoleDriver
+		constructor: ->
+			$.extend @,
+				url: "console://"
+				stdout: process.stdout
+				stderr: process.stderr
+				supportsColor: Chalk.supportsColor
+	file: class FileDriver
+		constructor: (url) ->
+			$.extend @,
+				url: $.URL.stringify(url)
+				stdout: f = Fs.createWriteStream(url.path)
+				stderr: f
+				supportsColor: false
 	loggly: require('./driver-loggly')
 	mongodb: require('./driver-mongodb')
 }
 
 emitter = $.EventEmitter()
+outputs = $( new ConsoleDriver() )
 
-# manually select and initialize the console output driver
-currentDriver = drivers.console
-[drivers.console.stdout, drivers.console.stderr] = drivers.console.createWriteStreams { protocol: "console" }
+capacitor = (n, cb) -> -> if --n <= 0 then cb()
+
+writeToAll = (which) -> (data, enc, cb) ->
+	emitter.emit which, data, enc
+	_cb = capacitor(outputs.length, cb)
+	for driver in outputs
+		_data = data
+		_enc = enc
+		if not driver.supportsColor
+			_data = Chalk.stripColor data.toString(_enc = "utf8")
+		driver[which].write data, enc, _cb
 
 module.exports = Output = {
-	echo: (args...) ->
-		Output.stdout.write args.map($.toString).join(' ') + '\n'
+	warn: warn = (args...) ->
+		echo Chalk.yellow "[warn] " + args.map($.toString).join ' '
+	echo: echo = (args...) ->
+		line = args.map($.toString).join ' '
+		unless line.endsWith('\n')
+			line += '\n'
+		try Output.stdout.write line
+		catch err
+			console.log $.debugStack err
+			process.exit 1
 	tail: (client) ->
 		emitter.on 'stdout', send = client.write.bind client
 		emitter.on 'stderr', send
@@ -32,22 +57,27 @@ module.exports = Output = {
 			try client.close()
 		client.on 'disconnect', cleanup
 		client.on 'error', cleanup
-	setOutput: (url) ->
+	setOutput: (url, tee=false, remove=false) ->
 		url = $.URL.parse(url)
 		p = url.protocol
-		if d = drivers[p]
-			[d.stdout, d.stderr] = d.createWriteStreams url
-			currentDriver = d
+		if remove
+			s = $.URL.stringify(url)
+			for i in $.range(0,drivers.length).filterMap((i) -> if drivers[i].url is s then i else null).reverse()
+				drivers.splice i, 1
+		else if d = drivers[p]
+			driver = new drivers[p](url)
+			if tee
+				outputs.push driver
+			else
+				for driver in outputs
+					driver.close?()
+				outputs = [ driver ]
 		else
-			Output.echo "No such output driver: "+p
-	stdout: new stream.Writable write: (data, enc, cb) ->
-		emitter.emit 'stdout', data, enc
-		currentDriver.stdout.write data, enc, cb
-	stderr: new stream.Writable write: (data, enc, cb) ->
-		emitter.emit 'stderr', data, enc
-		currentDriver.stderr.write data, enc, cb
+			warn "No such output driver: "+p
+	stdout: new Stream.Writable write: writeToAll 'stdout'
+	stderr: new Stream.Writable write: writeToAll 'stderr'
 }
 
-Output.setOutput('console://')
+Output.teeOutput('console://')
 $.log.out = Output.echo
 $.extend module.exports, Output

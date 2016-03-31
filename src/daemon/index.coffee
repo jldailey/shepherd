@@ -10,7 +10,7 @@ Net = require "net"
 Shell = require "shelljs"
 Actions = require("./actions")
 {pidFile, socketFile, configFile} = require "./files"
-{echo} = require "./output"
+{echo, warn} = require "./output"
 
 unless 'HOME' of process.env
 	echo "No $HOME in environment, can't place .shepherd directory."
@@ -23,7 +23,7 @@ readPid = ->
 handleMessage = (msg, client) ->
 	# each message invokes an action from a registry
 	# defined in src/daemon/actions.coffee
-	echo "Handling action: #{msg.c}"
+	echo "Handling message:", msg
 	action = Actions[msg.c]
 	return unless action
 	doLog = action.onMessage?(msg, client)

@@ -78,4 +78,13 @@ module.exports = {
 		toMessage: (cmd) ->
 			{ c: 'enable', g: cmd.group, i: cmd.instance }
 	}
+	log: {
+		options: [
+			[ "--url <url>", "Send output to this destination. Supports protocols: console, file, loggly, and mongodb." ]
+			[ "--tee", "Send to this destination, in addition to other destinations." ]
+			[ "-rm, --remove", "Remove one url as a log destination." ]
+		]
+		toMessage: (cmd) ->
+			{ c: 'log', u: cmd.url, t: cmd.tee, r: cmd.remove }
+	}
 }

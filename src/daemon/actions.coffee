@@ -4,7 +4,7 @@ Process = require "../process"
 Shell = require 'shelljs'
 Fs = require 'fs'
 {configFile} = require "./files"
-{echo, stdout, stderr} = Output = require "./output"
+{echo, warn, stdout, stderr} = Output = require "./output"
 codec = $.TNET
 
 # the global herd of processes
@@ -31,7 +31,7 @@ class Proc
 		$.defineProperty @, 'uptime', {
 			get: => if @started then ($.now - @started) else 0
 		}
-		@log = $.logger "[shepd] [#{@id}]"
+		@log = $.logger "[#{@id}]"
 
 	# Start this process if it isn't already.
 	start: ->
@@ -79,7 +79,7 @@ class Proc
 	stop: ->
 		@expected = false
 		unless @started
-			echo "Ignoring request to stop instance #{@id} (reason: already stopped)."
+			warn "Ignoring request to stop instance #{@id} (reason: already stopped)."
 		else if @proc?.pid
 			echo "Killing process: #{@proc.pid}..."
 			Shell.exec "kill #{@proc.pid}"
@@ -116,7 +116,7 @@ doInstance = (method, instanceId) ->
 doGroup = (method, groupId) ->
 	acted = false
 	unless groupId?.length and groupId of Groups
-		echo "Invalid --group parameter: '#{groupId}'"
+		warn "Invalid --group parameter: '#{groupId}'"
 		return false
 	for proc in Groups[groupId].procs
 		acted or= proc[method]()
@@ -164,10 +164,10 @@ module.exports = actions = {
 	add: {
 		onMessage: (msg) ->
 			unless msg.g and msg.g.length
-				echo "--group is required with 'add'"
+				warn "--group is required with 'add'"
 				return false
 			if msg.g of Groups
-				echo "Ignoring add request for group #{msg.g} (reason: already created)."
+				warn "Ignoring add request for group #{msg.g} (reason: already created)."
 				return false
 			else
 				Groups[msg.g] = new Group(msg.g, msg.cd, msg.exec, msg.n, msg.p)
@@ -176,7 +176,7 @@ module.exports = actions = {
 	remove: {
 		onMessage: (msg) ->
 			unless msg.g and msg.g.length and msg.g of Groups
-				echo "Ignoring request to remove group: '#{msg.g}'."
+				warn "Ignoring request to remove group: '#{msg.g}'."
 				return false
 			else
 				delete Groups[msg.g]
@@ -185,10 +185,10 @@ module.exports = actions = {
 	scale: {
 		onMessage: (msg) ->
 			unless msg.g and msg.g.length
-				echo "--group is required with 'scale'"
+				warn "--group is required with 'scale'"
 				return false
 			unless msg.g of Groups
-				echo "Unknown group name passed to --group ('#{msg.g}')"
+				warn "Unknown group name passed to --group ('#{msg.g}')"
 				return false
 			group = Groups[msg.g]
 			dn = group.n - msg.n
@@ -200,5 +200,12 @@ module.exports = actions = {
 			else if dn < 0
 				echo "Scaling back #{dn} instances..."
 			return true
+	}
+	log: {
+		onMessage: (msg) ->
+			echo "Redirecting output to #{msg.u}..."
+			Output.setOutput msg.u, msg.t, msg.r
+			# set the output
+			return true # save in the config log
 	}
 }
