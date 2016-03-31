@@ -3,21 +3,27 @@ Fs = require 'fs'
 Stream = require 'stream'
 Chalk = require 'chalk'
 
+
+# wrap a writer to make it ensure that each line has a line-ending
+newlineWriter = (s) -> new Stream.Writable write: (data, enc, cb) ->
+	data = data.toString("utf8")
+	unless data.endsWith '\n'
+		data += '\n'
+	s.write data, "utf8", cb
+
 drivers = {
 	console: class ConsoleDriver
-		constructor: ->
-			$.extend @,
-				url: "console://"
-				stdout: process.stdout
-				stderr: process.stderr
-				supportsColor: Chalk.supportsColor
+		constructor: -> $.extend @,
+			url: "console://"
+			stdout: newlineWriter process.stdout
+			stderr: newlineWriter process.stderr
+			supportsColor: Chalk.supportsColor
 	file: class FileDriver
-		constructor: (url) ->
-			$.extend @,
-				url: $.URL.stringify(url)
-				stdout: f = Fs.createWriteStream(url.path)
-				stderr: f
-				supportsColor: false
+		constructor: (url, parsed) -> $.extend @,
+			url: url
+			stdout: w = newlineWriter Fs.createWriteStream parsed.path, flags: 'a+'
+			stderr: w
+			supportsColor: false
 	loggly: require('./driver-loggly')
 	mongodb: require('./driver-mongodb')
 }
@@ -35,19 +41,14 @@ writeToAll = (which) -> (data, enc, cb) ->
 		_enc = enc
 		if not driver.supportsColor
 			_data = Chalk.stripColor data.toString(_enc = "utf8")
-		driver[which].write data, enc, _cb
+		driver[which].write _data, _enc, _cb
 
-module.exports = Output = {
+Output = {
 	warn: warn = (args...) ->
-		echo Chalk.yellow "[warn] " + args.map($.toString).join ' '
+		echo Chalk.yellow("[warn]"), args...
 	echo: echo = (args...) ->
 		line = args.map($.toString).join ' '
-		unless line.endsWith('\n')
-			line += '\n'
-		try Output.stdout.write line
-		catch err
-			console.log $.debugStack err
-			process.exit 1
+		Output.stdout.write line
 	tail: (client) ->
 		emitter.on 'stdout', send = client.write.bind client
 		emitter.on 'stderr', send
@@ -57,27 +58,33 @@ module.exports = Output = {
 			try client.close()
 		client.on 'disconnect', cleanup
 		client.on 'error', cleanup
+	getOutputUrls: ->
+		outputs.select('url')
 	setOutput: (url, tee=false, remove=false) ->
-		url = $.URL.parse(url)
-		p = url.protocol
+		parsed = $.URL.parse(url)
+		p = parsed.protocol
 		if remove
-			s = $.URL.stringify(url)
-			for i in $.range(0,drivers.length).filterMap((i) -> if drivers[i].url is s then i else null).reverse()
-				drivers.splice i, 1
+			acted = false
+			while (i = outputs.select('url').indexOf url) > -1
+				outputs.splice i, 1
+				acted = true
+			return acted
 		else if d = drivers[p]
-			driver = new drivers[p](url)
-			if tee
-				outputs.push driver
+			if outputs.select('url').indexOf(url) > -1
+				# warn "Ignoring request to add output: #{url} (reason: already added)"
+				return false
+			driver = new d(url, parsed)
+			if tee then outputs.push driver
 			else
-				for driver in outputs
-					driver.close?()
-				outputs = [ driver ]
+				outputs.select('close').call()
+				outputs.clear().push driver
+			return true
 		else
 			warn "No such output driver: "+p
+		false
 	stdout: new Stream.Writable write: writeToAll 'stdout'
 	stderr: new Stream.Writable write: writeToAll 'stderr'
 }
 
-Output.teeOutput('console://')
 $.log.out = Output.echo
 $.extend module.exports, Output

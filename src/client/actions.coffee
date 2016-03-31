@@ -31,9 +31,15 @@ module.exports = {
 		toMessage: (cmd) ->
 			{ c: 'status' }
 		onResponse: (resp) ->
-			resp.unshift ["--------", "---", "----", "------", "-------"]
-			resp.unshift ["Instance", "PID", "Port", "Uptime", "Healthy"]
-			for line,i in resp
+			$.log "Outputs"
+			$.log "-------"
+			for output in resp.outputs
+				$.log "\tURL: " + output
+			$.log ""
+			resp.procs.unshift ["--------", "---", "----", "------", "-------"]
+			resp.procs.unshift ["Instance", "PID", "Port", "Uptime", "Healthy"]
+			for line,i in resp.procs
+				# we must use this awkward color array to work-around the fact that $.padLeft will include the color codes in the string width and won't pad
 				colors = $.zeros(5).map -> 'white'
 				if i > 1
 					line[1] ?= "-"
@@ -82,7 +88,7 @@ module.exports = {
 		options: [
 			[ "--url <url>", "Send output to this destination. Supports protocols: console, file, loggly, and mongodb." ]
 			[ "--tee", "Send to this destination, in addition to other destinations." ]
-			[ "-rm, --remove", "Remove one url as a log destination." ]
+			[ "--remove", "Remove one url as a log destination." ]
 		]
 		toMessage: (cmd) ->
 			{ c: 'log', u: cmd.url, t: cmd.tee, r: cmd.remove }

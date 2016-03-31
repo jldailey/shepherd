@@ -1,4 +1,5 @@
 $ = require 'bling'
+{ warn } = require "./index"
 
 # The database connection has two phases: connected, and prepared
 connected = $.Promise()
@@ -17,27 +18,26 @@ prepare = (collection, size, db) -> # init the capped collection, when done fire
 	prepared
 
 usage = (msg) ->
-		console.error msg = "Must specify a mongodb url as mongodb://<host>[:port]/database/collection?size=<bytes> (#{msg})"
+	warn "Must specify a mongodb url as mongodb://<host>[:port]/database/collection?size=<bytes> (#{msg})"
 
 module.exports = class MongoDriver
-	constructor: (url) ->
-		[database, collection] = url.path.split('/')
-		size = parseInt url.query.size, 10
+	constructor: (url, parsed) ->
+		[database, collection] = parsed.path.split('/')
 		$.extend @, # start with a /dev/null stub that doesn't output anything
 			supportsColor: true
 			stdout: stub = (data, enc, cb) -> cb()
 			stderr: stub
 			close: ->
+		# parse the size off the query string
+		size = parseInt parsed.query.size, 10
 		unless collection?.length > 0
-			usage("invalid or missing collection argument")
-			return
+			throw new Error("invalid or missing collection argument in url: #{$.URL.stringify url}")
 		unless isFinite(size) and $.is('number', size) and 0 < size
-			usage("invalid or missing size argument")
-			return
-		connect(@url = $.URL.stringify(url)).then (db) ->
+			throw new Error("invalid or missing size argument in url: #{$.URL.stringify url}")
+		connect(@url = url).then (db) ->
 			prepare collection, size, db
 		prepared.wait (err, db) =>
-			if err then console.error "Failed to prepare MongoDB collection:", err
+			if err then warn "Failed to prepare MongoDB collection:", err
 			$.extend @,
 				supportsColor: false
 				stdout: stdout = new stream.Writable write: (data, enc, cb) ->

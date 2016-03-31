@@ -1,20 +1,21 @@
+{ warn } = require "./index"
 
 trueFalse = (s) -> s in ['true','yes','on']
 
 usage = ->
-	console.error "Error: a loggly url must be specified like loggly://<subdomain>?token=<token>[&tags=a,b,c][&json=false]"
+	warn "A loggly url should be specified like loggly://<subdomain>?token=<token>[&tags=a,b,c][&json=false]"
 
 module.exports = class LogglyDriver
-	constructor: (url) ->
-		@url = $.URL.stringify url
+	constructor: (url, parsed) ->
+		@url = url
 		@supportsColor = false
-		unless 'token' of url.query
+		unless 'token' of parsed.query
 			throw new Error "'token' is a required parameter for loggly."
 		client = require('loggly').createClient({
-			token: url.query.token
-			subdomain: url.host
-			tags: url.query.tags.split /, */
-			json: trueFalse url.query.json
+			token: parsed.query.token
+			subdomain: parsed.host
+			tags: parsed.query.tags.split /, */
+			json: trueFalse parsed.query.json
 		})
 		$.extend @,
 			supportsColor: false

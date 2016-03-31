@@ -4,7 +4,7 @@ Process = require "../process"
 Shell = require 'shelljs'
 Fs = require 'fs'
 {configFile} = require "./files"
-{echo, warn, stdout, stderr} = Output = require "./output"
+{echo, warn} = Output = require "./output"
 codec = $.TNET
 
 # the global herd of processes
@@ -24,7 +24,7 @@ class Proc
 		# the time of the most recent start
 		@started = undefined
 		@enabled = false
-		@cooldown = 25 # this increases after each failed restart
+		@cooldown = 250 # this increases after each failed restart
 		# is this process expected to be running?
 		@expected = false
 		# expose uptime
@@ -36,27 +36,28 @@ class Proc
 	# Start this process if it isn't already.
 	start: ->
 		if @started
-			echo "Ignoring request to start instance #{@id} (reason: already started)."
+			# echo "Ignoring request to start instance #{@id} (reason: already started)."
 			return false
 		unless @enabled
-			echo "Ignoring request to start instance #{@id} (reason: disabled)."
+			# echo "Ignoring request to start instance #{@id} (reason: disabled)."
 			return false
 		@expected = true
 		env = {}
-		resetCooldown = $.delay 5000, => @cooldown = 25
+		resetCooldown = $.delay 5000, => @cooldown = 250
 		retryStart = =>
 			@cooldown *= 2
 			resetCooldown.cancel()
 			$.delay @cooldown, => @start()
+		newlineWrapper = (w) => (data) =>
+			lines = data.toString("utf8")
+			prefix = "[#{@id}] "
+			lines = prefix + lines.replace(/\n$/,'').replace(/\n/g, '\n' + prefix)
+			w.write lines
 		doStart = =>
 			@proc = Shell.exec @exec, { cwd: @cd, env: env, silent: true, async: true }
 			@started = $.now
-			@proc.stdout.on 'data', (data) =>
-				for line in data.toString().split '\n'
-					stdout.write "[#{@id}] " + line + "\n"
-			@proc.stderr.on 'data', (data) =>
-				for line in data.toString().split '\n'
-					stderr.write "[#{@id}] (stderr) " + line + "\n"
+			@proc.stdout.on 'data', newlineWrapper Output.stdout
+			@proc.stderr.on 'data', newlineWrapper Output.stderr
 			@proc.on 'exit', (code, signal) =>
 				@log "Process exited, code=#{code} signal=#{signal}."
 				@started = undefined
@@ -79,7 +80,7 @@ class Proc
 	stop: ->
 		@expected = false
 		unless @started
-			warn "Ignoring request to stop instance #{@id} (reason: already stopped)."
+			# warn "Ignoring request to stop instance #{@id} (reason: already stopped)."
 		else if @proc?.pid
 			echo "Killing process: #{@proc.pid}..."
 			Shell.exec "kill #{@proc.pid}"
@@ -119,14 +120,14 @@ doGroup = (method, groupId) ->
 		warn "Invalid --group parameter: '#{groupId}'"
 		return false
 	for proc in Groups[groupId].procs
-		acted or= proc[method]()
+		acted = proc[method]() or acted
 	return acted
 
 doAll = (method) ->
 	acted = false
 	for group of Groups
 		for proc in group.procs
-			acted or= proc[method]
+			acted = proc[method]() or acted
 	return acted
 
 simple = (method, doLog=false) -> {
@@ -146,13 +147,16 @@ module.exports = actions = {
 	enable:  simple 'enable', true
 	status: {
 		onMessage: (msg, client) ->
-			output = []
+			output = {
+				procs: []
+				outputs: Output.getOutputUrls()
+			}
 			$.valuesOf(Groups).each (group) ->
 				healthy = undefined
 				if 'health' of group and 'health' of proc
-					healthy = proc.health.status
+					healthy = proc.health.healthy
 				for proc in group.procs
-					output.push [ proc.id, proc.proc?.pid, proc.port, proc.uptime, healthy ]
+					output.procs.push [ proc.id, proc.proc?.pid, proc.port, proc.uptime, healthy ]
 			client.write codec.stringify(output)
 			return false
 	}
@@ -167,7 +171,7 @@ module.exports = actions = {
 				warn "--group is required with 'add'"
 				return false
 			if msg.g of Groups
-				warn "Ignoring add request for group #{msg.g} (reason: already created)."
+				# warn "Ignoring add request for group #{msg.g} (reason: already created)."
 				return false
 			else
 				Groups[msg.g] = new Group(msg.g, msg.cd, msg.exec, msg.n, msg.p)
@@ -176,7 +180,7 @@ module.exports = actions = {
 	remove: {
 		onMessage: (msg) ->
 			unless msg.g and msg.g.length and msg.g of Groups
-				warn "Ignoring request to remove group: '#{msg.g}'."
+				# warn "Ignoring request to remove group: '#{msg.g}'."
 				return false
 			else
 				delete Groups[msg.g]
@@ -193,7 +197,7 @@ module.exports = actions = {
 			group = Groups[msg.g]
 			dn = group.n - msg.n
 			if dn is 0
-				echo "Ignoring request to scale to the same n (#{msg.n})"
+				# echo "Ignoring request to scale to the same n (#{msg.n})"
 				return false
 			else if dn > 0
 				echo "Adding #{dn} instances..."
@@ -203,9 +207,6 @@ module.exports = actions = {
 	}
 	log: {
 		onMessage: (msg) ->
-			echo "Redirecting output to #{msg.u}..."
-			Output.setOutput msg.u, msg.t, msg.r
-			# set the output
-			return true # save in the config log
+			return Output.setOutput msg.u, msg.t, msg.r
 	}
 }
