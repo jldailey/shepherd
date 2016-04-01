@@ -33,7 +33,6 @@ handleMessage = (msg, client) ->
 		addToLog(msg)
 
 addToLog = (msg) ->
-	echo "Adding message to log...", msg
 	Fs.appendFileSync configFile, $.TNET.stringify msg
 
 readLog = ->
@@ -43,7 +42,7 @@ readLog = ->
 	
 	while data.length > 0
 		[msg, data] = $.TNET.parseOne(data)
-		echo "Loading message from config:", msg
+		echo "[shepd start] Replaying command:", msg
 		handleMessage(msg)
 
 doStop = (exit) ->

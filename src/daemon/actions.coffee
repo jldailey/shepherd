@@ -42,7 +42,7 @@ class Proc
 			# echo "Ignoring request to start instance #{@id} (reason: disabled)."
 			return false
 		@expected = true
-		env = {}
+		env = { PORT: @port }
 		resetCooldown = $.delay 5000, => @cooldown = 250
 		retryStart = =>
 			@cooldown *= 2
@@ -67,7 +67,6 @@ class Proc
 					@proc?.unref?()
 					@proc = undefined
 		if @port
-			env.PORT = @port
 			Process.findOne({ ports: @port }).then (proc) =>
 				if proc
 					@log "Attempting to kill owner of my port, pid:", proc.pid
@@ -125,19 +124,35 @@ doGroup = (method, groupId) ->
 
 doAll = (method) ->
 	acted = false
-	for group of Groups
+	for k,group of Groups
 		for proc in group.procs
+			echo "[shepd] doAll:", method
 			acted = proc[method]() or acted
 	return acted
 
 simple = (method, doLog=false) -> {
-	onMessage: (msg) ->
+	onMessage: (msg, client) ->
 		acted = switch
 			when msg.g then doGroup method, msg.g
 			when msg.i then doInstance method, msg.i
 			else doAll method
+		if client and acted
+			client.write codec.stringify getStatus()
 		acted and doLog
 }
+
+getStatus = ->
+	output = {
+		procs: []
+		outputs: Output.getOutputUrls()
+	}
+	$.valuesOf(Groups).each (group) ->
+		healthy = undefined
+		if 'health' of group and 'health' of proc
+			healthy = proc.health.healthy
+		for proc in group.procs
+			output.procs.push [ proc.id, proc.proc?.pid, proc.port, proc.uptime, healthy ]
+	return output
 
 module.exports = actions = {
 	start:   simple 'start', false
@@ -147,17 +162,7 @@ module.exports = actions = {
 	enable:  simple 'enable', true
 	status: {
 		onMessage: (msg, client) ->
-			output = {
-				procs: []
-				outputs: Output.getOutputUrls()
-			}
-			$.valuesOf(Groups).each (group) ->
-				healthy = undefined
-				if 'health' of group and 'health' of proc
-					healthy = proc.health.healthy
-				for proc in group.procs
-					output.procs.push [ proc.id, proc.proc?.pid, proc.port, proc.uptime, healthy ]
-			client.write codec.stringify(output)
+			client.write codec.stringify getStatus()
 			return false
 	}
 	tail: {
@@ -166,16 +171,15 @@ module.exports = actions = {
 			return false
 	}
 	add: {
-		onMessage: (msg) ->
+		onMessage: (msg, client) ->
 			unless msg.g and msg.g.length
 				warn "--group is required with 'add'"
 				return false
 			if msg.g of Groups
-				# warn "Ignoring add request for group #{msg.g} (reason: already created)."
 				return false
-			else
-				Groups[msg.g] = new Group(msg.g, msg.cd, msg.exec, msg.n, msg.p)
-				return true
+			Groups[msg.g] = new Group(msg.g, msg.d, msg.x, msg.n, msg.p)
+			client.write codec.stringify getStatus()
+			return true
 	}
 	remove: {
 		onMessage: (msg) ->
@@ -208,5 +212,15 @@ module.exports = actions = {
 	log: {
 		onMessage: (msg) ->
 			return Output.setOutput msg.u, msg.t, msg.r
+	}
+	health: {
+		onMessage: (msg) -> return switch
+			when msg.d then Health.unmonitor msg.u
+			when msg.p then Health.pause msg.u
+			when msg.r then Health.resume msg.u
+			else Health.monitor msg.u, msg.i, msg.s, msg.t
+	}
+	nginx: {
+		onMessage: (msg) ->
 	}
 }

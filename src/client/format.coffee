@@ -23,4 +23,6 @@ formatUptime = (ms) ->
 		.replace(/^(0[wdhm])*/,'')
 	ret
 
-module.exports = { yesNo, formatUptime }
+trueFalse = (v) -> if v then true else false
+
+module.exports = { yesNo, formatUptime, trueFalse }

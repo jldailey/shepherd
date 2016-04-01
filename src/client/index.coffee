@@ -29,7 +29,7 @@ send_command = (cmd) ->
 		if err.code is 'ENOENT'
 			echo "Server is not running."
 		else
-			$.log "socket.on 'error', ->", $.debugStack err
+			echo "socket.on 'error', ->", $.debugStack err
 
 	socket.on 'connect', ->
 		socket.write codec.stringify(action.toMessage cmd), ->
@@ -54,5 +54,6 @@ for name, action of actions
 	p.action send_command
 
 # parse the command line and invoke the action handlers
+echo process.argv.join ' '
 program.parse process.argv
 
