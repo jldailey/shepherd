@@ -147,11 +147,8 @@ getStatus = ->
 		outputs: Output.getOutputUrls()
 	}
 	$.valuesOf(Groups).each (group) ->
-		healthy = undefined
-		if 'health' of group and 'health' of proc
-			healthy = proc.health.healthy
 		for proc in group.procs
-			output.procs.push [ proc.id, proc.proc?.pid, proc.port, proc.uptime, healthy ]
+			output.procs.push [ proc.id, proc.proc?.pid, proc.port, proc.uptime, proc.healthy ]
 	return output
 
 module.exports = actions = {
@@ -178,7 +175,7 @@ module.exports = actions = {
 			if msg.g of Groups
 				return false
 			Groups[msg.g] = new Group(msg.g, msg.d, msg.x, msg.n, msg.p)
-			client.write codec.stringify getStatus()
+			client?.write codec.stringify getStatus()
 			return true
 	}
 	remove: {
@@ -216,9 +213,11 @@ module.exports = actions = {
 	health: {
 		onMessage: (msg) -> return switch
 			when msg.d then Health.unmonitor msg.u
-			when msg.p then Health.pause msg.u
+			when msg.z then Health.pause msg.u
 			when msg.r then Health.resume msg.u
-			else Health.monitor msg.u, msg.i, msg.s, msg.t
+			else
+				return false unless msg.g of Groups
+				Health.monitor Groups[msg.g], msg.p, msg.i, msg.s, msg.t, msg.o
 	}
 	nginx: {
 		onMessage: (msg) ->

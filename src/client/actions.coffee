@@ -2,7 +2,12 @@ $ = require 'bling'
 Chalk = require 'chalk'
 {yesNo, formatUptime, trueFalse } = require "./format"
 
-int = (n) -> parseInt n, 10
+int = (n) -> parseInt (n ? 0), 10
+
+trueSymbol = Chalk.green "\u2713" # ✓
+falseSymbol = Chalk.red "\u2715" # ✕
+nullSymbol = Chalk.yellow "?"
+getSymbol = (v) -> if v then trueSymbol else if (not v?) then nullSymbol else falseSymbol
 
 module.exports = Actions = {
 	start: {
@@ -46,9 +51,7 @@ module.exports = Actions = {
 					line[1] ?= "-"
 					colors[1] = if line[1] is '-' then 'red' else 'green'
 					line[3] = formatUptime line[3]
-					line[4] = if line[4] is undefined then "?" else yesNo line[4]
-					if line[4] is "?"
-						colors[4] = "yellow"
+					line[4] = getSymbol line[4]
 				$.log ( Chalk[colors[i]]($.padLeft String(item ? ''), 14) for item,i in line).join ''
 	}
 	tail: {
@@ -92,15 +95,28 @@ module.exports = Actions = {
 	}
 	health: {
 		options: [
-			[ "--url <url>", "Make an HTTP request to this address."]
+			[ "--group <group>", "Check all processes in this group." ]
+			[ "--path <path>", "Will request http://localhost:port/<path> and check the response." ]
 			[ "--status <code>", "Check the status code of the response."]
 			[ "--contains <text>", "Check that the response contains some bit of text."]
 			[ "--interval <secs>", "How often to run a check." ]
+			[ "--timeout <ms>", "Fail if response is slower than this." ]
 			[ "--delete", "Remove a health check." ]
 			[ "--pause", "Temporarily pause a health check." ]
 			[ "--resume", "Resume a health check after pausing." ]
 		]
-		toMessage: (cmd) -> { c: 'health', u: cmd.url, s: int cmd.status, t: cmd.contains, i: int cmd.interval, p: trueFalse cmd.pause, r: trueFalse cmd.resume, d: trueFalse cmd.delete }
+		toMessage: (cmd) -> {
+			c: 'health',
+			g: cmd.group,
+			p: cmd.path,
+			s: int cmd.status,
+			i: int cmd.interval,
+			o: int cmd.timeout,
+			t: cmd.contains,
+			d: trueFalse cmd.delete,
+			z: trueFalse cmd.pause,
+			r: trueFalse cmd.resume
+		}
 	}
 	nginx: {
 		options: [
