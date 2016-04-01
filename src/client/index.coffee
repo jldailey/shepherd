@@ -32,7 +32,9 @@ send_command = (cmd) ->
 			echo "socket.on 'error', ->", $.debugStack err
 
 	socket.on 'connect', ->
-		socket.write codec.stringify(action.toMessage cmd), ->
+		msg = action.toMessage cmd
+		bytes = codec.stringify msg
+		socket.write bytes, ->
 			# some commands wait for a response
 			if 'onConnect' of action
 				action.onConnect(socket)
@@ -54,6 +56,6 @@ for name, action of actions
 	p.action send_command
 
 # parse the command line and invoke the action handlers
-echo process.argv.join ' '
+echo ["> shepherd"].concat(process.argv.slice(2)).join ' '
 program.parse process.argv
 

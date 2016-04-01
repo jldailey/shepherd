@@ -86,13 +86,12 @@ switch $(process.argv).last()
 			echo "[shepd start] Socket file still exists:", socketFile
 			process.exit 1
 
-		echo "[shepd start] Writing PID to file:", process.pid
-		Fs.writeFileSync(pidFile, process.pid)
-
-		echo "[shepd start] Reading configuration state..."
 		readLog()
 
-		echo "[shepd start] Opening socket...", socketFile
+		echo "[shepd start] Writing PID #{process.pid} to file...", pidFile
+		Fs.writeFileSync(pidFile, process.pid)
+
+		echo "[shepd start] Opening server socket...", socketFile
 		socket = Net.Server().listen({ path: socketFile })
 		socket.on 'error', (err) ->
 			echo "[shepd start] Failed to open socket:", $.debugStack err

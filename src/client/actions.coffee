@@ -2,7 +2,7 @@ $ = require 'bling'
 Chalk = require 'chalk'
 {yesNo, formatUptime, trueFalse } = require "./format"
 
-int = (n) -> parseInt (n ? 0), 10
+int = (n) -> parseInt((n ? 0), 10)
 
 trueSymbol = Chalk.green "\u2713" # ✓
 falseSymbol = Chalk.red "\u2715" # ✕
@@ -45,14 +45,11 @@ module.exports = Actions = {
 			resp.procs.unshift ["--------", "---", "----", "------", "-------"]
 			resp.procs.unshift ["Instance", "PID", "Port", "Uptime", "Healthy"]
 			for line,i in resp.procs
-				# we must use this awkward color array to work-around the fact that $.padLeft will include the color codes in the string width and won't pad
-				colors = $.zeros(5).map -> 'white'
 				if i > 1
-					line[1] ?= "-"
-					colors[1] = if line[1] is '-' then 'red' else 'green'
+					line[1] ?= Chalk.red "-"
 					line[3] = formatUptime line[3]
 					line[4] = getSymbol line[4]
-				$.log ( Chalk[colors[i]]($.padLeft String(item ? ''), 14) for item,i in line).join ''
+				$.log ( ($.padLeft String(item ? ''), 14) for item,i in line).join ''
 	}
 	tail: {
 		toMessage: (cmd) -> { c: 'tail' }
@@ -66,7 +63,7 @@ module.exports = Actions = {
 			[ "--count <n>", "The starting size of the group." ]
 			[ "--port <port>", "If specified, set PORT in env for each child, incrementing port each time." ]
 		]
-		toMessage: (cmd) -> { c: 'add', g: cmd.group, d: cmd.cd, x: cmd.exec, n: int cmd.count, p: int cmd.port }
+		toMessage: (cmd) -> { c: 'add', g: cmd.group, d: cmd.cd, x: cmd.exec, n: int(cmd.count), p: int(cmd.port) }
 		onResponse: statusResponse
 	}
 	disable: {
