@@ -8,9 +8,11 @@ $ = require "bling"
 Fs = require "fs"
 Net = require "net"
 Shell = require "shelljs"
-Actions = require("./actions")
+Output = require "./output"
+Actions = require("../actions")
 {pidFile, socketFile, configFile} = require "./files"
-{echo, warn} = require "./output"
+
+echo = $.logger "[shepherd-daemon]"
 
 unless 'HOME' of process.env
 	echo "No $HOME in environment, can't place .shepherd directory."
@@ -48,20 +50,20 @@ readLog = ->
 doStop = (exit) ->
 	if pid = readPid()
 		# send a stop command to all running instances
-		echo "[shepd stop] Sending stop action to instances..."
+		echo "Sending stop action to instances..."
 		Actions.stop.onMessage({})
 		# give them a little time to exit gracefully
-		echo "[shepd stop] Killing daemon pid: #{pid}..."
+		echo "Killing daemon pid: #{pid}..."
 		# then kill the pid from the pid file (our own?)
 		result = Shell.exec "kill #{pid}", { silent: true, async: false }
 		if result.stderr.indexOf("No such process") > -1
-			echo "[shepd stop] Removing stale PID file and socket."
+			echo "Removing stale PID file and socket."
 			try Fs.unlink(pidFile)
 			try Fs.unlink(socketFile)
 	else
-		echo "[shepd stop] Not running."
+		echo "Not running."
 	if exit
-		echo "[shepd stop] Exiting with code 0"
+		echo "Exiting with code 0"
 		process.exit 0
 
 switch $(process.argv).last()
@@ -75,26 +77,26 @@ switch $(process.argv).last()
 		child.unref()
 		# die
 		process.exit 1
-	else
+	else # "start" is default
 		exists = (path) -> return try Fs.statSync(path).isFile() catch then false
 
 		if exists(pidFile)
-			echo "[shepd start] Already running as PID:", readPid()
+			echo "Already running as PID:", readPid()
 			process.exit 1
 
 		if exists(socketFile)
-			echo "[shepd start] Socket file still exists:", socketFile
+			echo "Socket file still exists:", socketFile
 			process.exit 1
 
 		readLog()
 
-		echo "[shepd start] Writing PID #{process.pid} to file...", pidFile
+		echo "Writing PID #{process.pid} to file...", pidFile
 		Fs.writeFileSync(pidFile, process.pid)
 
-		echo "[shepd start] Opening server socket...", socketFile
+		echo "Opening server socket...", socketFile
 		socket = Net.Server().listen({ path: socketFile })
 		socket.on 'error', (err) ->
-			echo "[shepd start] Failed to open socket:", $.debugStack err
+			echo "socket error:", $.debugStack err
 			process.exit 1
 		socket.on 'connection', (client) ->
 			client.on 'data', (msg) ->
@@ -102,7 +104,7 @@ switch $(process.argv).last()
 				handleMessage(msg, client)
 
 		shutdown = (signal) -> ->
-			echo "[shepd] Shutting down...", signal
+			echo "Shutting down...", signal
 			try Fs.unlinkSync(pidFile)
 			try socket.close()
 			if signal isnt 'exit'

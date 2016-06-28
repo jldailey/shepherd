@@ -11,18 +11,27 @@ pkg = JSON.parse require("fs").readFileSync __dirname + "/../../package.json"
 # set the version based on package.json
 program.version(pkg.version).usage("<command> [options]")
 
-codec = $.TNET # slower than JSON but allows sending nulls, custom types, etc
-
 basePath = "#{process.env.HOME}/.shepherd"
 socketFile = [basePath, "socket"].join "/"
 
 # import the action registry
-actions = require("./actions")
+Actions = require("../actions")
+
+read_tnet_stream = (s, cb) ->
+	buf = ""
+	s.on 'data', (data) ->
+		buf += data.toString("utf8")
+		while buf.length > 0
+			[ item, _buf ] = $.TNET.parseOne( buf )
+			break if _buf.length is buf.length # if we didn't consume anything, wait for the next data to resume parsing
+			buf = _buf
+			cb item
+	null
 
 # every action passes command-line objects to the server
 send_command = (cmd) ->
-	return unless cmd._name of actions
-	action = actions[cmd._name]
+	return unless cmd._name of Actions
+	action = Actions[cmd._name]
 
 	socket = net.connect({ path: socketFile})
 	socket.on 'error', (err) -> # probably daemon is not running, should start it
@@ -33,29 +42,32 @@ send_command = (cmd) ->
 
 	socket.on 'connect', ->
 		msg = action.toMessage cmd
-		bytes = codec.stringify msg
+		bytes = $.TNET.stringify msg
 		socket.write bytes, ->
 			# some commands wait for a response
 			if 'onConnect' of action
 				action.onConnect(socket)
 			if 'onResponse' of action
-				delay = $.delay 1000, ->
+				timeout = $.delay 1000, ->
 					echo "Timed-out waiting for a response from the server."
 					socket.end()
-				socket.on 'data', (resp) ->
-					delay.cancel()
-					action.onResponse codec.parse resp.toString()
-					socket.end()
+				# TODO: we should have a TNET socket wrapper,
+				# which keeps buffering data events until
+				# it can parse one object from the stream and continue.
+				read_tnet_stream socket, (item) ->
+					timeout.cancel()
+					action.onResponse item, socket
 			else socket.end()
 
 # use the action registry to set command-line options
-for name, action of actions
+for name, action of Actions
 	p = program.command(name)
 	for option in action.options ? []
-		p.option option[0], option[1]
+		p.option option[0], option[1], option[2]
 	p.action send_command
 
 # parse the command line and invoke the action handlers
+$.log.disableTimestamps()
 echo ["> shepherd"].concat(process.argv.slice(2)).join ' '
 program.parse process.argv
 

@@ -3,7 +3,6 @@ Fs = require 'fs'
 Stream = require 'stream'
 Chalk = require 'chalk'
 
-
 # wrap a writer to make it ensure that each line has a line-ending
 newlineWriter = (s) -> new Stream.Writable write: (data, enc, cb) ->
 	data = data.toString("utf8")
@@ -44,11 +43,6 @@ writeToAll = (which) -> (data, enc, cb) ->
 		driver[which].write _data, _enc, _cb
 
 Output = {
-	warn: warn = (args...) ->
-		echo Chalk.yellow("[warn]"), args...
-	echo: echo = (args...) ->
-		line = args.map($.toString).join ' '
-		Output.stdout.write line
 	tail: (client) ->
 		emitter.on 'stdout', send = client.write.bind client
 		emitter.on 'stderr', send
@@ -61,30 +55,37 @@ Output = {
 	getOutputUrls: ->
 		outputs.select('url')
 	setOutput: (url, tee=false, remove=false) ->
+		acted = false
 		parsed = $.URL.parse(url)
 		p = parsed.protocol
 		if remove
-			acted = false
 			while (i = outputs.select('url').indexOf url) > -1
 				outputs.splice i, 1
 				acted = true
-			return acted
-		else if d = drivers[p]
-			if outputs.select('url').indexOf(url) > -1
-				# warn "Ignoring request to add output: #{url} (reason: already added)"
-				return false
+		else if (d = drivers[p]) and not outputs.select('url').contains(url)
 			driver = new d(url, parsed)
 			if tee then outputs.push driver
 			else
 				outputs.select('close').call()
 				outputs.clear().push driver
-			return true
+			acted = true
 		else
-			warn "No such output driver: "+p
-		false
+			$.log "[warning] Did not add output: #{url} - " + switch
+				when not p? then "No valid protocol."
+				when not drivers[p] then "No driver for protocol."
+				when outputs.select('url').contains(url) then "Already added."
+				else ""
+		return acted
 	stdout: new Stream.Writable write: writeToAll 'stdout'
 	stderr: new Stream.Writable write: writeToAll 'stderr'
 }
 
-$.log.out = Output.echo
+# Connect $.log to the Output driver system.
+$.log.out = (args...) ->
+	Output.stdout.write args.map($.toString).join ' '
+
+# Output from the server prepends a timestamp.
+# TODO?: use the new prefix level argument in bling 0.9.4?
+$.log.enableTimestamps()
+
 $.extend module.exports, Output
