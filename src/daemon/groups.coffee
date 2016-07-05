@@ -39,7 +39,7 @@ class Proc
 		# the time of the most recent start
 		@started = undefined
 		@enabled = false
-		@cooldown = 150 # this increases after each failed restart
+		@cooldown = 50 # this increases after each failed restart
 		# is this process expected to be running?
 		@expected = false
 		# expose uptime
@@ -60,7 +60,7 @@ class Proc
 		retryStart = =>
 			@cooldown *= 2 # every time we restart, double the cooldown
 			resetCooldown.cancel()
-			$.log "Waiting for #{@cooldown} ms to restart..."
+			$.log "Waiting #{@cooldown}ms to re-attempt start operation..."
 			$.delay @cooldown, =>
 				$.log "Retrying start..."
 				@start()
