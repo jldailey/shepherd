@@ -106,9 +106,11 @@ module.exports = {
 	tail: {
 		toMessage: (cmd) -> { c: 'tail' }
 		onConnect: (socket) ->
+			$.log "Piping socket to stdout..."
 			socket.pipe(process.stdout)
 			process.on 'SIGINT', -> try socket.end()
 		onMessage: (msg, client) ->
+			$.log "Calling Output.tail...", msg
 			Output.tail(client)
 			return false
 	}
@@ -139,7 +141,7 @@ module.exports = {
 			[ "--group <group>", "Which group to scale." ]
 			[ "--count <n>", "How many processes should be running.", int ]
 		]
-		toMessage: (cmd) -> { c: 'scale', g: msg.g, n: msg.count }
+		toMessage: (cmd) -> { c: 'scale', g: cmd.group, n: cmd.count }
 		onMessage: (msg, client) ->
 			unless msg.g and msg.g.length
 				warn "--group is required with 'scale'"
@@ -148,13 +150,7 @@ module.exports = {
 				warn "Unknown group name passed to --group ('#{msg.g}')"
 				return false
 			group = Groups.get(msg.g)
-			dn = group.n - msg.n
-			if dn is 0
-				return false
-			else if dn > 0
-				echo "Adding #{dn} instances..."
-			else if dn < 0
-				echo "Scaling back #{dn} instances..."
+			group.scale(msg.n)
 			return true
 	}
 
