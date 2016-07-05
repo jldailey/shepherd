@@ -142,7 +142,7 @@ Process.getSignalNumber = (signal) ->
 	signals[signal] ? (if $.is 'number', signal then signal else 15)
 
 Process.kill = (pid, signal) ->
-	try Process.exec "kill -#{Process.getSignalNumber signal} #{pid}"
+	try Process.exec("kill -#{Process.getSignalNumber signal} #{pid}", true).wait (err, output) -> log "Process",pid,"killed:", output
 	catch err then log "kill error:", $.debugStack err
 
 Process.tree = (proc) ->
