@@ -2,7 +2,7 @@
 $ = require 'bling'
 Shell = require 'shelljs'
 Process = require '../util/process'
-echo = $.logger __filename
+echo = $.logger $(__filename.split '/').last()
 warn = $.logger "[warning]"
 
 # the global herd of processes
@@ -10,12 +10,24 @@ Groups = new Map()
 # m.clear m.delete m.entries m.forEach m.get m.has m.keys m.set m.size m.values
 
 class Group
+	createProcess = (g, i) ->
+		port = undefined
+		if g.port
+			port = g.port + i
+		new Proc "#{g.name}-#{i}", g.cd, g.exec, port, g
 	constructor: (@name, @cd, @exec, @n, @port) ->
-		@procs = $.range(0,@n).map (i) =>
-			port = undefined
-			if @port
-				port = @port + i
-			new Proc "#{@name}-#{i}", @cd, @exec, port, @
+		@procs = $.range(0,@n).map (i) => createProcess @, i
+	scale: (n) ->
+		dn = n - @n
+		if dn > 0
+			echo "Adding #{dn} instances..."
+			for d in [0...dn] by 1
+				@procs.push createProcess(@, @n + d).start()
+		else if dn < 0
+			echo "Trimming #{dn} instances..."
+			while @n < n
+				@procs.pop().stop()
+				@n += 1
 	actOn: (method) ->
 		return @procs
 			.select(method)
@@ -48,7 +60,10 @@ class Proc
 		retryStart = =>
 			@cooldown *= 2 # every time we restart, double the cooldown
 			resetCooldown.cancel()
-			$.delay @cooldown, => @start()
+			$.log "Waiting for #{@cooldown} ms to restart..."
+			$.delay @cooldown, =>
+				$.log "Retrying start..."
+				@start()
 		doStart = =>
 			@proc = Shell.exec @exec, { cwd: @cd, env: env, silent: true, async: true }
 			@started = $.now
@@ -65,10 +80,14 @@ class Proc
 			Process.findOne({ ports: @port }).then (proc) =>
 				if proc
 					echo "Process #{@id} attempting to kill owner of port #{@port} (pid:", proc.pid,")"
-					Process.kill(proc.pid, 'SIGTERM').then retryStart
-				else doStart()
-		else doStart()
-		return true
+					Process.kill(proc.pid, 'SIGTERM').wait retryStart
+				else
+					echo "Attempting to start process...", @exec, "on port", @port
+					doStart()
+		else
+			echo "Attempting to start process...", @exec
+			doStart()
+		return @
 
 	stop: (cb) ->
 		@expected = false
