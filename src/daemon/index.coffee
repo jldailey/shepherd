@@ -13,6 +13,8 @@ Actions = require("../actions")
 {pidFile, socketFile, configFile} = require "./files"
 
 echo = $.logger "[shepherd-daemon]"
+commands = process.argv.slice(2).join ' '
+echo "> shepd", commands
 
 unless 'HOME' of process.env
 	echo "No $HOME in environment, can't place .shepherd directory."
