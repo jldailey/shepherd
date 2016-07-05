@@ -22,9 +22,9 @@ read_tnet_stream = (s, cb) ->
 	s.on 'data', (data) ->
 		buf += data.toString("utf8")
 		while buf.length > 0
-			[ item, _buf ] = $.TNET.parseOne( buf )
-			break if _buf.length is buf.length # if we didn't consume anything, wait for the next data to resume parsing
-			buf = _buf
+			[ item, rest ] = $.TNET.parseOne( buf )
+			break if rest.length is buf.length # if we didn't consume anything, wait for the next data to resume parsing
+			buf = rest
 			cb item
 	null
 
@@ -36,7 +36,7 @@ send_command = (cmd) ->
 	socket = net.connect({ path: socketFile})
 	socket.on 'error', (err) -> # probably daemon is not running, should start it
 		if err.code is 'ENOENT'
-			echo "Server is not running."
+			echo "Shepherd master daemon (shepd) is not running."
 		else
 			echo "socket.on 'error', ->", $.debugStack err
 
@@ -51,7 +51,7 @@ send_command = (cmd) ->
 				timeout = $.delay 1000, ->
 					echo "Timed-out waiting for a response from the server."
 					socket.end()
-				# TODO: we should have a TNET socket wrapper,
+				# we use a TNET socket wrapper,
 				# which keeps buffering data events until
 				# it can parse one object from the stream and continue.
 				read_tnet_stream socket, (item) ->
