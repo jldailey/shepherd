@@ -161,14 +161,18 @@ module.exports = {
 	# Add/remove log output destinations.
 	log: {
 		options: [
+			[ "--list", "List the current output URLs." ]
 			[ "--url <url>", "Send output to this destination. Supports protocols: console, file, loggly, and mongodb." ]
 			[ "--tee", "Send to this destination, in addition to other destinations." ]
 			[ "--remove", "Remove one url as a log destination." ]
 		]
-		toMessage: (cmd) -> { c: 'log', u: cmd.url, t: trueFalse cmd.tee, r: trueFalse cmd.remove }
-		onMessage: (msg) ->
-			console.log "setOutput", msg
-			return Output.setOutput msg.u, msg.t, msg.r
+		toMessage: (cmd) -> { c: 'log', l: (trueFalse cmd.list), u: cmd.url, t: (trueFalse cmd.tee), r: (trueFalse cmd.remove) }
+		onMessage: (msg, client) ->
+			if msg.l
+				client.write(Output.getOutputUrls().toString())
+				return false
+			else
+				return Output.setOutput msg.u, msg.t, msg.r
 	}
 
 	# Add/remove a health check.
