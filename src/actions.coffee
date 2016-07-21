@@ -112,6 +112,7 @@ module.exports = {
 		onConnect: (socket) ->
 			$.log "Piping socket to stdout..."
 			socket.pipe(process.stdout)
+			socket.ref()
 			process.on 'SIGINT', -> try socket.end()
 		onMessage: (msg, client) ->
 			$.log "Calling Output.tail...", msg
