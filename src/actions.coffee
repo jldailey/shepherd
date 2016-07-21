@@ -1,9 +1,12 @@
 
 $ = require 'bling'
+Fs = require 'fs'
 Chalk = require 'chalk'
 Output = require "./daemon/output"
+Health = require "./daemon/health"
 int = (n) -> parseInt((n ? 0), 10)
-{yesNo, formatUptime, trueFalse} = require "./format"
+{ yesNo, formatUptime, trueFalse } = require "./format"
+{ configFile } = require "./daemon/files"
 
 healthSymbol = (v) -> switch v
 	when undefined then Chalk.yellow "?"
@@ -80,13 +83,14 @@ module.exports = {
 			for output in resp.outputs
 				$.log "\tURL: " + output
 			$.log ""
-			resp.procs.unshift ["--------", "---", "----", "------", "-------"]
-			resp.procs.unshift ["Instance", "PID", "Port", "Uptime", "Healthy"]
+			resp.procs.unshift ["--------", "---", "----", "------", "-------", "-------", "------"]
+			resp.procs.unshift ["Instance", "PID", "Port", "Uptime", "Healthy", "Enabled", "Status"]
 			for line,i in resp.procs
 				if i > 1
 					line[1] ?= Chalk.red "-"
 					line[3] = formatUptime line[3]
 					line[4] = healthSymbol line[4]
+					line[5] = healthSymbol line[5]
 				$.log ( ($.padLeft String(item ? ''), 14) for item,i in line).join ''
 			socket.end()
 
@@ -97,7 +101,7 @@ module.exports = {
 			}
 			Groups.forEach (group) ->
 				for proc in group.procs
-					output.procs.push [ proc.id, proc.proc?.pid, proc.port, proc.uptime, proc.healthy ]
+					output.procs.push [ proc.id, proc.proc?.pid, proc.port, proc.uptime, proc.healthy, proc.enabled, proc.statusString ]
 			client.write $.TNET.stringify output
 			return false
 	}
