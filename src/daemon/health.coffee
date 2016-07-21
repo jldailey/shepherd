@@ -1,20 +1,24 @@
-{ echo } = require './output'
+require './output'
 $ = require 'bling'
+Http = require 'http'
+echo = $.logger "[health]"
 
 $.extend module.exports, {
 	monitor: (group, path, interval, status, text, timeout) ->
 		group.monitors or= Object.create null
-		return false if path of monitors
-		doCheck = ->
-			for proc in group.procs then do ->
+		return false if path of group.monitors
+		group.monitors[path] = $.interval interval, ->
+			for proc in group.procs when proc.expected then do (group, path, interval, status, text, timeout, proc) ->
 				proc.healthy = undefined
 				fail = (msg) ->
-					echo "Health check failed (#{msg}), pid: #{proc.pid} port: #{proc.port}"
+					countdown?.cancel()
+					echo "Health check failed (#{msg}), pid: #{proc.proc?.pid} port: #{proc.port}"
 					proc.healthy = false
-					proc.kill()
+					proc.proc?.kill()
 				if timeout
 					countdown = $.delay timeout, $.partial fail, "timeout"
-				req = http.request {
+				req = Http.get {
+					host: "localhost"
 					port: proc.port
 					path: path
 				}, (res) ->
@@ -29,11 +33,10 @@ $.extend module.exports, {
 						res.on 'end', ->
 							unless buffer.indexOf(text) > -1
 								fail("text not found: " + text)
-						res.on 'error', (err) ->
-							fail("response error: " + String(err))
+					res.on 'error', (err) ->
+						fail("response error: " + String(err))
 				req.on 'error', (err) ->
 					fail("request error: " + String(err))
-		group.monitors[path] = $.interval interval, doCheck
 	unmonitor: (group, path) ->
 		return false unless 'monitors' of group
 		return false unless path of group.monitors
