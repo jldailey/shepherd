@@ -1,28 +1,23 @@
 $ = require 'bling'
 Fs = require 'fs'
-Stream = require 'stream'
 Chalk = require 'chalk'
-
-# wrap a writer to make it ensure that each line has a line-ending
-newlineWriter = (s) -> new Stream.Writable write: (data, enc, cb) ->
-	data = data.toString("utf8")
-	unless data.endsWith '\n'
-		data += '\n'
-	s.write data, "utf8", cb
+Stream = require 'stream'
 
 drivers = {
 	console: class ConsoleDriver
 		constructor: -> $.extend @,
 			url: "console://"
-			stdout: newlineWriter process.stdout
-			stderr: newlineWriter process.stderr
+			stdout: process.stdout
+			stderr: process.stderr
 			supportsColor: Chalk.supportsColor
+			needsNewline: true
 	file: class FileDriver
 		constructor: (url, parsed) -> $.extend @,
 			url: url
-			stdout: w = newlineWriter Fs.createWriteStream parsed.path, flags: 'a+'
+			stdout: w = Fs.createWriteStream parsed.path, flags: 'a+'
 			stderr: w
 			supportsColor: false
+			needsNewline: true
 	loggly: require('./driver-loggly')
 	mongodb: require('./driver-mongodb')
 }
@@ -30,17 +25,23 @@ drivers = {
 emitter = $.EventEmitter()
 outputs = $( new ConsoleDriver() )
 
+# must be called n times and then cb() gets called
 capacitor = (n, cb) -> -> if --n <= 0 then cb()
 
 writeToAll = (which) -> (data, enc, cb) ->
 	emitter.emit which, data, enc
+	data = data.toString("utf8")
+	enc = "utf8"
+	_stripped_data = null # cache of data with color removed, if at least one driver needs it
 	_cb = capacitor(outputs.length, cb)
 	for driver in outputs
 		_data = data
-		_enc = enc
-		if not driver.supportsColor
-			_data = Chalk.stripColor data.toString(_enc = "utf8")
-		driver[which].write _data, _enc, _cb
+		unless driver.supportsColor
+			_data = (_stripped_data or= Chalk.stripColor data)
+		if driver.needsNewline
+			_data += "\n" unless _data.endsWith("\n")
+		driver[which].write _data, enc, _cb
+	null
 
 Output = {
 	tail: (client) ->
@@ -52,11 +53,10 @@ Output = {
 			try client.close()
 		client.on 'disconnect', cleanup
 		client.on 'error', cleanup
-	getOutputUrls: ->
-		outputs.select('url')
+	getOutputUrls: -> outputs.select('url')
 	setOutput: (url, tee=false, remove=false) ->
 		acted = false
-		parsed = $.URL.parse(url)
+		parsed = $.URL.parse(url) or {}
 		p = parsed.protocol
 		if remove
 			while (i = outputs.select('url').indexOf url) > -1
@@ -82,7 +82,8 @@ Output = {
 
 # Connect $.log to the Output driver system.
 $.log.out = (args...) ->
-	Output.stdout.write args.map($.toString).join ' '
+	str = args.map($.toString).join ' '
+	Output.stdout.write str
 
 # Output from the server prepends a timestamp.
 # TODO?: use the new prefix level argument in bling 0.9.4?
