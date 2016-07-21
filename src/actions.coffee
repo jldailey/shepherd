@@ -219,4 +219,15 @@ module.exports = {
 		toMessage: (cmd) -> { c: 'nginx', f: cmd.config, r: cmd.reload, d: trueFalse cmd.disable }
 	}
 
+	config: {
+		options: [
+			[ "--purge", "Remove all configuration." ]
+		]
+		toMessage: (cmd) -> { c: 'config', p: (trueFalse cmd.purge) }
+		onMessage: (msg) ->
+			if msg.p
+				Fs.writeFileSync configFile, ""
+
+	}
+
 }
