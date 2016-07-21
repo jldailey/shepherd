@@ -113,7 +113,7 @@ module.exports = {
 			$.log "Piping socket to stdout..."
 			socket.pipe(process.stdout)
 			socket.ref()
-			process.on 'SIGINT', -> try socket.end()
+			process.on 'exit', -> try socket.end()
 		onMessage: (msg, client) ->
 			$.log "Calling Output.tail...", msg
 			Output.tail(client)
