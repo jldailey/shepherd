@@ -2,7 +2,7 @@
 $ = require 'bling'
 Shell = require 'shelljs'
 Process = require '../util/process'
-echo = $.logger $(__filename.split '/').last()
+echo = $.logger "[groups]"
 warn = $.logger "[warning]"
 
 # the global herd of processes
@@ -33,19 +33,25 @@ class Group
 			.select(method)
 			.call()
 			.reduce false, (a, x) -> a or x
+	toString: ->
+		("[#{proc.id}:#{proc.port}:#{proc.statusString}] " for proc in @procs).join " "
 
 class Proc
 	constructor: (@id, @cd, @exec, @port, @group) ->
 		# the time of the most recent start
 		@started = undefined
 		@enabled = false
-		@cooldown = 50 # this increases after each failed restart
+		@cooldown = 25 # this increases after each failed restart
 		# is this process expected to be running?
 		@expected = false
 		# expose uptime
 		$.defineProperty @, 'uptime', {
 			get: => if @started then ($.now - @started) else 0
 		}
+		@statusString = "disabled"
+	
+	log: (args...) ->
+		$.log "[#{@id}]", args...
 
 	# Start this process if it isn't already.
 	start: ->
@@ -55,22 +61,37 @@ class Proc
 			return false
 		@expected = true
 		env = { PORT: @port }
-		# if we don't fail-retry within 5 seconds, revert the cooldown to it's default
-		resetCooldown = $.delay 5000, => @cooldown = 150
 		retryStart = =>
-			@cooldown *= 2 # every time we restart, double the cooldown
-			resetCooldown.cancel()
-			$.log "Waiting #{@cooldown}ms to re-attempt start operation..."
+			return unless @enabled
+			@cooldown = (Math.min 10000, @cooldown * 2)
+			@statusString = "waiting #{@cooldown}"
+			@log @group.toString()
 			$.delay @cooldown, =>
-				$.log "Retrying start..."
 				@start()
 		doStart = =>
+			return unless @enabled
+			@statusString = "starting"
 			@proc = Shell.exec @exec, { cwd: @cd, env: env, silent: true, async: true }
-			@started = $.now
+			if @port
+				checkStarted = $.interval 500, =>
+					Process.findOne({ ports: @port }).then (proc) =>
+						if proc?.pid is @proc.pid # owned by us
+							@started = $.now
+							@cooldown = 25
+							@statusString = "started"
+							checkStarted.cancel()
+			else # if there is no port to wait for
+				# then staying up for 3 (or more) seconds, counts as started
+				checkStarted = $.delay (Math.max 3000, @cooldown), =>
+					@started = $.now
+					@cooldown = 25
+					@statusString = "started"
 			@proc.stdout.on 'data', (data) => $.log "[#{@id}]", data.toString("utf8")
 			@proc.stderr.on 'data', (data) => $.log "[#{@id}] (stderr)", data.toString("utf8")
 			@proc.on 'exit', (code, signal) =>
-				echo "Process #{@id} exited, code=#{code} signal=#{signal}."
+				checkStarted?.cancel()
+				@log "Process exit.", {code, signal}
+				@statusString = "exit(#{code})"
 				@started = undefined
 				if @expected then retryStart()
 				else
@@ -79,41 +100,44 @@ class Proc
 		if @port
 			Process.findOne({ ports: @port }).then (proc) =>
 				if proc
-					echo "Process #{@id} attempting to kill owner of port #{@port} (pid:", proc.pid,")"
+					@statusString = "killing #{proc.pid}"
 					Process.kill(proc.pid, 'SIGTERM').wait retryStart
 				else
-					echo "Attempting to start process...", @exec, "on port", @port
 					doStart()
 		else
-			echo "Attempting to start process...", @exec
 			doStart()
 		return @
 
 	stop: (cb) ->
+		@statusString = "stopping"
 		@expected = false
 		unless @started
 			# warn "Ignoring request to stop instance #{@id} (reason: already stopped)."
 		else if @proc?.pid
-			echo "Killing process: #{@proc.pid}..."
 			Shell.exec "kill #{@proc.pid}", { silent: true, async: true }, -> cb? true
 			@started = undefined
+			@statusString = "stopped"
 			return true
+		@statusString = "stopped"
 		cb? false
 		return false
 
 	restart: ->
+		@statusString = "restarting"
 		@stop => @start()
 
 	enable: ->
 		acted = ! @enabled
 		@enabled = true
-		@start()
+		@statusString = "enabled"
+		if acted then @start()
 		acted
 
 	disable: ->
 		acted = @enabled
 		@enabled = false
-		@stop()
+		if acted then @stop()
+		@statusString = "disabled"
 		acted
 
 actOnInstance = (method, instanceId) ->
@@ -122,6 +146,7 @@ actOnInstance = (method, instanceId) ->
 	[groupId, index] = instanceId.split('-')
 	index = parseInt index, 10
 	proc = Groups.get(groupId).procs[index]
+	echo "acting on instance", method, instanceId, groupId, index, proc
 	return acted = proc[method]()
 
 actOnAll = (method) ->
@@ -142,7 +167,7 @@ removeGroup = (name) ->
 	return true
 
 simpleAction = (method, doLog=false) -> (msg, client) ->
-	$.log "simpleAction", method, msg
+	echo "simpleAction", method, msg
 	acted = switch
 		when msg.g then Groups.get(msg.g)?.actOn method
 		when msg.i then actOnInstance method, msg.i
