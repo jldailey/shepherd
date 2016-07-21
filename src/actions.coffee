@@ -192,13 +192,14 @@ module.exports = {
 			c: 'health',
 			g: cmd.group,
 			p: cmd.path,
-			s: int cmd.status,
-			i: int cmd.interval,
-			o: int cmd.timeout,
+			s:(int cmd.status),
+			i:(1000 * int cmd.interval),
+			o:(int cmd.timeout),
 			t: cmd.contains,
-			d: trueFalse cmd.delete,
-			z: trueFalse cmd.pause,
-			r: trueFalse cmd.resume
+			d:(trueFalse cmd.delete),
+			z:(trueFalse cmd.pause),
+			r:(trueFalse cmd.resume)
+		}
 		onMessage: (msg) -> return switch
 			when msg.d then Health.unmonitor msg.u
 			when msg.z then Health.pause msg.u
@@ -206,7 +207,6 @@ module.exports = {
 			else
 				return false unless Groups.has(msg.g)
 				Health.monitor Groups.get(msg.g), msg.p, msg.i, msg.s, msg.t, msg.o
-		}
 	}
 
 	# Configure nginx integration.
