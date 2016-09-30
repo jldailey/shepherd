@@ -48,7 +48,13 @@ class Proc
 		$.defineProperty @, 'uptime', {
 			get: => if @started then ($.now - @started) else 0
 		}
-		@statusString = "disabled"
+		statusString = "disabled"
+		$.defineProperty @, 'statusString', {
+			get: -> return statusString
+			set: (v) =>
+				statusString = v
+				@log @group.toString()
+		}
 	
 	log: (args...) ->
 		$.log "[#{@id}]", args...
@@ -65,7 +71,6 @@ class Proc
 			return unless @enabled
 			@cooldown = (Math.min 10000, @cooldown * 2)
 			@statusString = "waiting #{@cooldown}"
-			@log @group.toString()
 			$.delay @cooldown, =>
 				@start()
 		doStart = =>
