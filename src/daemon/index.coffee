@@ -16,7 +16,6 @@ Actions = require("../actions")
 	configFile } = require "./files"
 
 echo = $.logger "[shepherd-daemon]"
-echo "> shepd", process.argv.slice(2).join ' '
 
 unless 'HOME' of process.env
 	echo "No $HOME in environment, can't place .shepherd directory."
@@ -47,11 +46,19 @@ readLog = ->
 	try data = Fs.readFileSync configFile
 	catch err
 		if err.code is "ENOENT" then return
+		throw err
 	
 	while data.length > 0
 		[msg, data] = $.TNET.parseOne(data)
 		echo "[shepd start] Replaying command:", msg
 		handleMessage(msg)
+
+clearLog = ->
+	echo "Clearing configuration..."
+	try Fs.writeFileSync configFile, ""
+	catch err
+		if err.code is "ENOENT" then return
+		throw err
 
 exists = (path) -> return try (stat = Fs.statSync path).isFile() or stat.isSocket() catch then false
 
@@ -69,8 +76,6 @@ doStop = (exit) ->
 			echo "Removing stale PID file and socket."
 			try Fs.unlinkSync(pidFile)
 			try Fs.unlinkSync(socketFile)
-	else
-		echo "Not running."
 	if exit
 		echo "Exiting with code 0"
 		process.exit 0
@@ -80,6 +85,7 @@ doStatus = ->
 	echo "PID File:", pidFile, if exists(pidFile) then Chalk.green("(exists)") else Chalk.yellow("(does not exist)")
 
 doStart = ->
+	console.log(7)
 	echo "Starting..."
 	if exists(pidFile)
 		echo "Already running as PID:", readPid()
@@ -115,19 +121,24 @@ doStart = ->
 		process.on sig, shutdown(sig) 
 
 switch _cmd = $(process.argv).last()
-	when "stop"
-		echo _cmd
-		doStop(true)
+	when "stop" then doStop(true) # stop and exit
 	when "restart"
-		cmd = process.argv.join(' ')
-		start = cmd.replace(/ restart$/, " start")
-		doStop(false)
-		# start a new child that is a copy of ourself
-		child = Shell.exec start, { silent: true, async: true }
+		doStop(false) # stop but dont exit
+		# replace " restart" with " start"
+		cmd = process.argv.join(' ').replace(/ restart$/, " start")
+		# start a new child with the "start" command-line
+		child = Shell.exec(cmd, { silent: true, async: true })
 		child.unref()
-		# die
-		process.exit 1
+
+		$.delay 0, -> # give the child a tick to get going
+			# then die
+			process.exit 0
+	when "start" then doStart()
+	when "flush-config" then clearLog()
 	when "status" then doStatus()
-	else # "start" is default
-		doStart()
+	when "help", "-h", "--help"
+		console.log "Usage: shepd <command>"
+		console.log "Commands: start stop restart status flush-config help"
+		process.exit 0
+	else doStatus()
 
