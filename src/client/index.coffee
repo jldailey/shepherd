@@ -69,5 +69,6 @@ for name, action of Actions
 # parse the command line and invoke the action handlers
 $.log.disableTimestamps()
 echo ["> shepherd"].concat(process.argv.slice(2)).join ' '
+process.argv = process.argv.map (arg) -> if arg is "help" then "--help" else arg
 program.parse process.argv
 
