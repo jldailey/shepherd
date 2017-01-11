@@ -1,5 +1,8 @@
 #!/bin/bash
 
+echo "(disabled)"
+exit 0
+
 ROOT=`dirname $0`/..
 source $ROOT/test/common.sh
 FULL="${PWD}/${ROOT}"
@@ -26,7 +29,7 @@ echo "
 " > $JSON_FILE
 PORTS="9002 9003 9004"
 
-echo "
+echo """
 Rabbit = require '$FULL/node_modules/rabbit-pubsub'
 
 Rabbit.connect('$AMQP_URL').wait (err) ->
@@ -44,7 +47,7 @@ Rabbit.connect('$AMQP_URL').wait (err) ->
 	setTimeout (->
 		Rabbit.publish '$AMQP_CHANNEL', { op: 'get-status' }
 	), 500
-" > $COFFEE_FILE
+""" > $COFFEE_FILE
 
 # this test is not concerned with starting 'over the top'
 # of an already running instance, so we kill it all first

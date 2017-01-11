@@ -35,10 +35,11 @@ for PORT in $PORTS; do
 	check_output $PORT
 done
 PID=`cat $PID_FILE`
+ps -eo pid,ppid,command | grep 'node\s' | grep -v grep
 CHILDREN=`ps -eo pid,ppid,command | grep 'node\s' | grep -v grep | wc -l`
 shepherd_stop
-if [ "$CHILDREN" -ne 11 ]; then
-	echo "FAIL: Expected 9 children, got '$CHILDREN'"
+if [ "$CHILDREN" -ne 16 ]; then
+	echo "FAIL: Expected 16 children, got '$CHILDREN'"
 	exit 1
 else
 	echo "PASS"

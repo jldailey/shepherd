@@ -22,8 +22,8 @@ shepherd_start
 PID=`cat $PID_FILE`
 CHILDREN=`ps -eo pid,ppid,command | grep 'node\s' | grep -v grep | wc -l`
 shepherd_stop
-if [ "$CHILDREN" -ne 5 ]; then
-	echo "FAIL: Expected 5 children, got '$CHILDREN'" 'from `ps -eo pid,ppid,command | grep node\s | grep -v grep`'
+if [ "$CHILDREN" -ne 7 ]; then
+	echo "FAIL: Expected 7 children, got '$CHILDREN'" 'from `ps -eo pid,ppid,command | grep node\s | grep -v grep`'
 	exit 1
 else
 	echo "PASS"

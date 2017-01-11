@@ -34,6 +34,7 @@ for PORT in $PORTS; do
 done
 
 shepherd_start
+sleep 3
 for PORT in $PORTS; do
 	check_output $PORT
 done
