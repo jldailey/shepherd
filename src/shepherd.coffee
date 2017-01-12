@@ -19,7 +19,23 @@ outputs = {
 
 # create additional output streams requested by the user
 if Opts.O isnt "-"
-	try outputs[Opts.O] = Fs.createWriteStream Opts.O, { flags: 'a', mode: 0o666, encoding: 'utf8' }
+	try
+		retryCount = 1000
+		do reopen = ->
+			if --retryCount <= 0
+				console.error "Output stream giving up, too many open failures"
+				return
+			(outputs[Opts.O] = Fs.createWriteStream Opts.O, { flags: 'a', mode: 0o640, encoding: 'utf8' })\
+				.on('finish', ->
+					console.error "Output stream finished"
+					delete outputs[Opts.O]
+					$.delay 0, reopen
+				)
+				.on('error', (err) ->
+					console.error "Output stream error:", err
+					delete outputs[Opts.O]
+					$.delay 0, reopen
+				)
 	catch err then die "Failed to open output stream:", $.debugStack err
 
 $.log.out = (a...) ->
