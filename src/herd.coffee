@@ -4,6 +4,8 @@
 	'./http', './opts', './helpers', 'rabbit-pubsub', './convert', 'jade'
 ].map require
 
+cpuCount = Os.cpus().length
+
 # loggers
 log = $.logger "[herd-#{$.random.string 4}]"
 verbose = -> if Opts.verbose then log.apply null, arguments
@@ -34,11 +36,15 @@ class Herd
 		connectSignals @ # register our process signal handlers
 		# create Server objects
 		for opts in @opts.servers
+			while opts.count < 0
+				opts.count += cpuCount
 			for index in [0...opts.count] by 1
 				verbose "Creating server:", opts, index
 				@children.push new Server opts, index
 		# create Worker objects
 		for opts in @opts.workers
+			while opts.count < 0
+				opts.count += cpuCount
 			for index in [0...opts.count] by 1
 				verbose "Creating worker:", opts, index
 				@children.push new Worker opts, index
